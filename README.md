@@ -6,6 +6,20 @@
 > 界面布局与文案参考 DeepSeek chat-demo 的公开页面，仅作学习与自用；相关商标与素材归其权利人所有。
 > 需要模型能力时调用的是**你自己 DSH 里配置的**模型与密钥，本项目不附带任何密钥。
 
+## 预览
+
+会话列表的「⋯」菜单（深色主题）：
+
+![会话列表菜单](docs/screenshots/session-menu-dark.png)
+
+删除的二次确认（深色主题）：
+
+![删除二次确认](docs/screenshots/delete-confirm-dark.png)
+
+浅色主题：
+
+![浅色主题](docs/screenshots/light.png)
+
 ## 功能
 
 - 会话侧栏：按今天 / 昨天 / 7 天内 / 30 天内分组，本地持久化；右上角胶囊 `☰` 打开抽屉、`＋` 新建对话
