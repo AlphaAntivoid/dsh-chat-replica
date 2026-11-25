@@ -19,6 +19,14 @@ Delete confirmation (dark theme):
 
 ![Delete confirmation](media/screenshots/delete-confirm-dark.png)
 
+Editing a user message and re-answering (dark theme):
+
+![Edit message](media/screenshots/edit-message-dark.png)
+
+A conversation forked from an answer (dark theme):
+
+![Fork](media/screenshots/fork-dark.png)
+
 Light theme:
 
 ![Light theme](media/screenshots/light.png)

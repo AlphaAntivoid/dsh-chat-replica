@@ -18,6 +18,14 @@
 
 ![删除二次确认](media/screenshots/delete-confirm-dark.png)
 
+编辑用户消息并重新生成（深色主题）：
+
+![编辑消息](media/screenshots/edit-message-dark.png)
+
+分叉出的新会话（深色主题）：
+
+![分叉](media/screenshots/fork-dark.png)
+
 浅色主题：
 
 ![浅色主题](media/screenshots/light.png)

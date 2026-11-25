@@ -3,6 +3,16 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.8.1
+
+### 中文
+
+- README 预览新增「编辑消息」弹窗与「分叉」后新会话的两张截图（深色主题），中英文档同步引用
+
+### English
+
+- The README preview now shows the "Edit message" dialog and the conversation created by Fork (both dark theme), referenced from the Chinese and English documents
+
 ## 1.8.0
 
 ### 中文

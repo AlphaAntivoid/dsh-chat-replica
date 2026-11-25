@@ -4,10 +4,11 @@
 
 ## 待办
 
-- [ ] 1. README 补「编辑消息」与「分叉」截图
+- [x] 1. README 补「编辑消息」与「分叉」截图
   - 用 `dsh-tools/make-screenshots.js` 增加场景（编辑弹窗、分叉后的列表），输出到 `media/screenshots/`
   - 中英 README 各加引用；截图脚本里菜单项索引与按钮文案要同步（菜单 5 项：重命名/置顶/多选/导出/删除）
   - 验收：两张 PNG 入库，中英 README 均能显示
+  - 完成 v1.8.1：新增 `edit-message-dark.png`、`fork-dark.png`；菜单 5 项索引已核对，对话框 textarea 内容可正确渲染
 
 - [ ] 2. 字体大小设置
   - 设置面板「通用设置」加三档（小 / 标准 / 大），存 `deepseek-chat-ui.font.v1`
