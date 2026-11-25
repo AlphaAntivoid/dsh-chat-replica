@@ -3,6 +3,20 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.5.0
+
+### 中文
+
+- 删除可撤销：确认后提示条保留 **8 秒** 并提供「撤销」，恢复会话、草稿和当时打开的会话
+- 撤销快照只保留最近一次：超时或期间再次删除其他会话，之前的就永久删除
+- 撤销按钮可通过键盘访问，提示条使用 `role="status"` 播报
+
+### English
+
+- Deletion is undoable: after confirming, the toast stays for **8 seconds** with an "Undo" action that restores the conversations, their drafts and the one that was open
+- Only the latest deletion keeps an undo snapshot; after 8 seconds, or once another deletion happens, it is permanent
+- The undo action is keyboard reachable and the toast is announced through `role="status"`
+
 ## 1.4.0
 
 ### 中文

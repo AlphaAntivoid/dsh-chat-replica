@@ -23,6 +23,8 @@ window.__ModuleLoader__.load({
     const STORE_TTS = 'deepseek-chat-ui.tts.v1';
     const DEFAULT_EXPORT_DIR = '/sdcard/Download';
     const DRAWER_MS = 200;
+    /** 删除后允许撤销的时间窗（毫秒）；超过就真的没了。 */
+    const UNDO_MS = 8000;
 
     /* ------------------------------------------------------------------ copy */
 
@@ -101,6 +103,8 @@ window.__ModuleLoader__.load({
       'toast.importedNone': '没有新对话，{count} 个都是重复的',
       'toast.importFailed': '导入失败：不是有效的导出文件',
       'toast.storageFull': '本地存储已满，最近的改动可能没有保存',
+      'toast.deleted': '已删除 {count} 个对话',
+      'toast.undo': '撤销',
       'error.boundary.title': '对话模式出了点问题',
       'error.boundary.desc': '你的本地对话还在。可以点重试，或切换到别的面板再回来。',
       'error.boundary.retry': '重试',
@@ -228,6 +232,8 @@ window.__ModuleLoader__.load({
       'toast.importedNone': 'No new conversations — {count} duplicates skipped',
       'toast.importFailed': 'Import failed: not a valid export file',
       'toast.storageFull': 'Local storage is full — recent changes may not be saved',
+      'toast.deleted': 'Deleted {count} conversations',
+      'toast.undo': 'Undo',
       'error.boundary.title': 'Chat mode hit a problem',
       'error.boundary.desc': 'Your local conversations are still here. Retry, or switch to another panel and come back.',
       'error.boundary.retry': 'Retry',
@@ -2663,6 +2669,8 @@ window.__ModuleLoader__.load({
       const [selectedIds, setSelectedIds] = useState([]);
       const [renameTarget, setRenameTarget] = useState(null);
       const [deleteTarget, setDeleteTarget] = useState(null);
+      /** 删除后 8 秒内可撤销；快照包含被删会话、草稿和当时的激活会话。 */
+      const [undoDelete, setUndoDelete] = useState(null);
       const [storageError, setStorageError] = useState(false);
 
       const bodyRef = useRef(null);
@@ -2671,6 +2679,7 @@ window.__ModuleLoader__.load({
       const recorderRef = useRef(null);
       const toastTimerRef = useRef(null);
       const saveTimerRef = useRef(null);
+      const undoTimerRef = useRef(null);
       const drawerTimerRef = useRef(null);
       const speechRef = useRef(null);
       const autoReadRef = useRef(false);
@@ -2876,6 +2885,7 @@ window.__ModuleLoader__.load({
               }
             }
             if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+            if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
             if (drawerTimerRef.current) clearTimeout(drawerTimerRef.current);
           };
         },
@@ -3485,11 +3495,51 @@ window.__ModuleLoader__.load({
         function () {
           const ids = deleteTarget ? deleteTarget.ids : [];
           setDeleteTarget(null);
+          if (ids.length === 0) return;
+          const removed = threads.filter(function (thread) {
+            return ids.indexOf(thread.id) >= 0;
+          });
+          const removedDrafts = {};
+          ids.forEach(function (id) {
+            if (drafts[id] !== undefined) removedDrafts[id] = drafts[id];
+          });
           dropThreads(ids);
           setSelecting(false);
           setSelectedIds([]);
+          if (removed.length === 0) return;
+          // 只保留最近一次删除的撤销快照：再删一次，上一次就过期了。
+          if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+          setUndoDelete({ threads: removed, drafts: removedDrafts, activeId: activeId });
+          undoTimerRef.current = setTimeout(function () {
+            undoTimerRef.current = null;
+            setUndoDelete(null);
+          }, UNDO_MS);
         },
-        [deleteTarget, dropThreads],
+        [deleteTarget, threads, drafts, activeId, dropThreads],
+      );
+
+      /** 8 秒内点「撤销」：恢复会话、草稿；如果被删的是当时打开的会话就重新打开它。 */
+      const undoDeleteNow = useCallback(
+        function () {
+          const snapshot = undoDelete;
+          if (!snapshot) return;
+          if (undoTimerRef.current) {
+            clearTimeout(undoTimerRef.current);
+            undoTimerRef.current = null;
+          }
+          setUndoDelete(null);
+          const next = snapshot.threads.concat(threads);
+          const nextActive = activeId === null && snapshot.activeId !== null ? snapshot.activeId : activeId;
+          setThreads(next);
+          setActiveId(nextActive);
+          saveNow(next, nextActive);
+          if (Object.keys(snapshot.drafts).length > 0) {
+            setDrafts(function (previous) {
+              return Object.assign({}, previous, snapshot.drafts);
+            });
+          }
+        },
+        [undoDelete, threads, activeId, saveNow],
       );
 
       const renameThread = useCallback(
@@ -4083,7 +4133,24 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'cd-input-area' },
-            toast ? h('div', { className: 'cd-toast', role: 'status' }, toast) : null,
+            undoDelete !== null
+              ? h(
+                  'div',
+                  { className: 'cd-toast cd-undo-toast', role: 'status' },
+                  h(
+                    'span',
+                    null,
+                    t('toast.deleted').replace('{count}', String(undoDelete.threads.length)),
+                  ),
+                  h(
+                    'button',
+                    { type: 'button', className: 'cd-undo-btn', onClick: undoDeleteNow },
+                    t('toast.undo'),
+                  ),
+                )
+              : toast
+                ? h('div', { className: 'cd-toast', role: 'status' }, toast)
+                : null,
             h(
               'div',
               { className: 'cd-input-box' },
@@ -4367,6 +4434,9 @@ body[data-ds-dark-theme] .cd-send:disabled{opacity:.55}
 @keyframes cd-pulse{50%{opacity:.35}}
 .cd-caveat{width:100%;padding:6px 0;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;text-align:center;user-select:none}
 .cd-toast{position:absolute;left:50%;bottom:calc(100% - 24px);transform:translateX(-50%);z-index:30;max-width:min(320px,calc(100% - 32px));padding:8px 12px;border-radius:10px;background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-base);font-size:13px;line-height:20px;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.cd-undo-toast{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.cd-undo-btn{padding:0;border:none;background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.cd-undo-btn:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 
 .cd-drawer-root{position:absolute;top:0;right:0;bottom:0;left:0;z-index:60}
 .cd-mask{position:absolute;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.45);animation:cd-fade .2s linear both}

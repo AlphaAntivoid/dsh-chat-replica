@@ -337,6 +337,7 @@ function mount(storageSeed, options) {
   rendering = false;
 
   const failWrites = Boolean(options && options.failWrites);
+  const timerDelays = [];
   const storage = new Map(Object.entries(storageSeed || {}));
   const localStorage = {
     getItem(key) {
@@ -374,7 +375,10 @@ function mount(storageSeed, options) {
     window,
     document: makeDocument(),
     console,
-    setTimeout,
+    setTimeout: (fn, ms) => {
+      timerDelays.push(ms);
+      return setTimeout(fn, ms);
+    },
     clearTimeout,
     fetch: async () => ({ ok: true, json: async () => ({}), text: async () => '{}' }),
     Blob,
@@ -414,7 +418,7 @@ function mount(storageSeed, options) {
   };
   plugin.apply(ctx);
 
-  return { registered, storage };
+  return { registered, storage, timerDelays };
 }
 
 function renderPanel(session) {
@@ -988,6 +992,29 @@ async function main() {
     tree = rerender();
     assert(byClass(tree, 'cd-toast').length === 1, 'single export reports through the toast');
     console.log('PASS 21: a single conversation exports from its menu');
+  }
+
+  /* --- 22. deletion can be undone within 8 seconds ------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[4]);
+    tree = rerender();
+    click(byClass(tree, 'cd-confirm-pill-danger')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 4, 'the conversation is deleted');
+    assert(byClass(tree, 'cd-undo-toast').length === 1, 'an undo toast appears after deleting');
+    const undoButton = byClass(tree, 'cd-undo-btn')[0];
+    assert(undoButton, 'the toast offers an undo action');
+    assert(textOf(undoButton).trim() === '撤销', 'the undo action is labelled 撤销');
+    assert(session.timerDelays.indexOf(8000) >= 0, 'the undo window is 8 seconds');
+    click(undoButton);
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 5, 'undo restores the conversation');
+    assert(byClass(tree, 'cd-undo-toast').length === 0, 'the undo toast goes away');
+    console.log('PASS 22: deleting can be undone within 8 seconds');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

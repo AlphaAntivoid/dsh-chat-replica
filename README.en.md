@@ -50,13 +50,17 @@ The "⋯" on the right of every conversation opens:
 | Pin | Pinned conversations form their own group above all date groups, most recently pinned first; pinned rows offer "Unpin" |
 | Select | Enters multi-select: every row becomes a checkbox and clicking toggles it; the toolbar offers select-all / clear-all (over the current filter), bulk pin, bulk export and bulk delete, and Escape leaves |
 | Export | Writes this one conversation as JSON to the export folder and reports the result in the toast |
-| Delete | Two-step confirmation; the conversation is removed from the list and localStorage and cannot be recovered |
+| Delete | Two-step confirmation; the conversation is removed immediately and gets an **8-second** undo, after which it is permanent |
 
 The delete confirmation is intentionally fixed in wording and styling:
 
 1. Title: `This conversation cannot be restored after deletion` (multi-select: `The selected N conversations cannot be restored after deletion`)
 2. Red pill with white text: `Delete conversation`
 3. Light-grey pill with black text: `Cancel`, focused by default, so pressing Enter cancels
+
+After confirming, a toast stays for **8 seconds** with an "Undo" action: undoing restores the deleted
+conversations, their drafts and the conversation that was open at the time. After 8 seconds — or once another
+deletion replaces the snapshot — the conversations are gone for good.
 
 Pin state lives in the thread's `pinnedAt` field (the same `deepseek-chat-ui.threads.v1` store), so it survives
 reloads and app restarts; records without the field are simply not pinned.
@@ -182,7 +186,7 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 - Import skips duplicates: same title, update time, message count and first message means the same conversation, and the status line reports how many were skipped
 - A full localStorage is surfaced as a "local storage is full" toast instead of silently dropping changes
 - A render failure shows a fallback inside this panel (with retry) instead of blanking the whole page
-- "Delete" is a permanent local delete with no recycle bin; bulk delete is equally irreversible.
+- "Delete" keeps only an 8-second undo window (the "Undo" in the toast); after that, or once another deletion replaces the snapshot, it is permanent
 
 ## Visual origin
 
