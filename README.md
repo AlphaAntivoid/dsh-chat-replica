@@ -45,7 +45,7 @@
 - 「智能搜索」先 `ctx.web.search()` 检索，再把前两条正文塞进系统提示，答案带来源链接
 - 朗读：官方 TTS 代理，音色 海星（女声）stella / 暗潮（男声）tide；每条回答下方有朗读 / 停止
 - 设置面板（两个分类，可左右滑动切换）：
-  - 通用设置：主题（浅色 / 深色 / 跟随系统）、语言（简体中文 / English，同时切换 DSH 界面语言）、朗读音色与自动朗读
+  - 通用设置：主题（浅色 / 深色 / 跟随系统）、字体大小（小 / 标准 / 大，14 / 16 / 18 px，只影响消息正文与输入框）、语言（简体中文 / English，同时切换 DSH 界面语言）、朗读音色与自动朗读
   - 数据管理：导入历史对话 / 导出历史对话 / 导出位置 / 删除所有对话
 - 会话列表右上角的「⋯」操作菜单：重命名、置顶、多选（批量置顶 / 删除）、二次确认删除
 
@@ -156,7 +156,7 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
    Host 端随之取消模型流。
 4. 语音：页面用 Web Audio 录 16 kHz 单声道 PCM，编成 WAV 上传；Host 走 `speechToText` provider。
 5. 会话保存在 `localStorage`（`deepseek-chat-ui.threads.v1`），开关状态在 `deepseek-chat-ui.prefs.v1`，
-   朗读设置（音色 + 自动朗读）在 `deepseek-chat-ui.tts.v1`。
+   字体大小在 `deepseek-chat-ui.font.v1`，朗读设置（音色 + 自动朗读）在 `deepseek-chat-ui.tts.v1`。
 6. 朗读与网页 demo 一致：`POST https://api.deepseek.com/v1/tools/tts`，
    `{text, voice_id: stella|tide, format: pcm, filter_markdown: true}`，返回 24 kHz 单声道 16 位 PCM；
    Host 用 profile 里的 `DEEPSEEK_API_KEY` 代发，页面按 `AudioContext(24000)` 排程播放。

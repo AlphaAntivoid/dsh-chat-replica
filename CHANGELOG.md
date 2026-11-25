@@ -3,6 +3,18 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.9.0
+
+### 中文
+
+- 设置面板「通用设置」新增字体大小：小 / 标准 / 大三档（14 / 16 / 18 px），存 `deepseek-chat-ui.font.v1`，切换即时生效
+- 消息正文（气泡与 Markdown）和输入框统一由 CSS 变量 `--cd-text-size` 驱动，行高、标题与行内代码随档位同步缩放
+
+### English
+
+- Added Text size under Settings → General: Small / Standard / Large (14 / 16 / 18 px), stored in `deepseek-chat-ui.font.v1` and applied immediately
+- Message text (bubbles and Markdown) and the composer are now driven by the `--cd-text-size` CSS variable, with line height, headings and inline code scaling along
+
 ## 1.8.1
 
 ### 中文

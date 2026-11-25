@@ -46,7 +46,7 @@ Light theme:
 - "Smart search" queries `ctx.web.search()` first, then puts the first two pages of text into the system prompt; answers carry source links
 - Read-aloud through the official TTS proxy, with two voices: Stella (female) and Tide (male); each answer has play / stop buttons
 - Settings panel with two swipeable tabs:
-  - General: theme (light / dark / follow system), language (Simplified Chinese / English, which also switches the DSH UI language), read-aloud voice and auto-read
+  - General: theme (light / dark / follow system), text size (small / standard / large, 14 / 16 / 18 px, affecting message text and the composer only), language (Simplified Chinese / English, which also switches the DSH UI language), read-aloud voice and auto-read
   - Data: import history, export history, export folder, delete all conversations
 - Conversation list actions behind the "⋯" on each row: rename, pin, multi-select (bulk pin / delete), delete with confirmation
 
@@ -165,7 +165,8 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 4. Voice: the page records 16 kHz mono PCM with Web Audio, wraps it in a WAV container and uploads it; the Host
    uses the `speechToText` provider.
 5. Conversations live in `localStorage` (`deepseek-chat-ui.threads.v1`); toggles in
-   `deepseek-chat-ui.prefs.v1`; read-aloud settings (voice + auto-read) in `deepseek-chat-ui.tts.v1`.
+   `deepseek-chat-ui.prefs.v1`; text size in `deepseek-chat-ui.font.v1`; read-aloud settings (voice + auto-read) in
+   `deepseek-chat-ui.tts.v1`.
 6. Read-aloud matches the web demo: `POST https://api.deepseek.com/v1/tools/tts` with
    `{text, voice_id: stella|tide, format: pcm, filter_markdown: true}` returns 24 kHz mono 16-bit PCM; the Host
    proxies the call with the profile's `DEEPSEEK_API_KEY` and the page schedules playback through

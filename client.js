@@ -21,6 +21,7 @@ window.__ModuleLoader__.load({
     const STORE_EXPORT_DIR = 'deepseek-chat-ui.export-dir.v1';
     const STORE_THEME_PREF = 'deepseek-chat-ui.theme-pref.v1';
     const STORE_TTS = 'deepseek-chat-ui.tts.v1';
+    const STORE_FONT = 'deepseek-chat-ui.font.v1';
     const DEFAULT_EXPORT_DIR = '';
     const DRAWER_MS = 200;
     /** 删除后允许撤销的时间窗（毫秒）；超过就真的没了。 */
@@ -67,6 +68,10 @@ window.__ModuleLoader__.load({
       'settings.theme': '主题',
       'settings.language': '语言',
       'settings.languageHint': '同时切换 DSH 界面语言',
+      'settings.fontSize': '字体大小',
+      'settings.fontSmall': '小',
+      'settings.fontStandard': '标准',
+      'settings.fontLarge': '大',
       'settings.autoRead': '自动朗读',
       'settings.ttsVoice': '朗读音色',
       'voice.stella': '海星（女声）',
@@ -208,6 +213,10 @@ window.__ModuleLoader__.load({
       'settings.theme': 'Theme',
       'settings.language': 'Language',
       'settings.languageHint': 'Also switches the DSH interface language',
+      'settings.fontSize': 'Text size',
+      'settings.fontSmall': 'Small',
+      'settings.fontStandard': 'Standard',
+      'settings.fontLarge': 'Large',
       'settings.autoRead': 'Auto read',
       'settings.ttsVoice': 'Read-aloud voice',
       'voice.stella': 'Stella (female)',
@@ -709,6 +718,28 @@ window.__ModuleLoader__.load({
     function saveTts(voice, auto) {
       try {
         window.localStorage.setItem(STORE_TTS, JSON.stringify({ voice: voice, auto: auto }));
+      } catch (error) {
+        /* the choice still applies for this page */
+      }
+    }
+
+    /** 正文字号三档；CSS 变量 --cd-text-size 是唯一出口。 */
+    const FONT_IDS = ['small', 'standard', 'large'];
+    const FONT_SIZES = { small: '14px', standard: '16px', large: '18px' };
+
+    function loadFontSize() {
+      try {
+        const raw = window.localStorage.getItem(STORE_FONT);
+        if (FONT_IDS.indexOf(raw) >= 0) return raw;
+      } catch (error) {
+        /* fall through to the default */
+      }
+      return 'standard';
+    }
+
+    function saveFontSize(id) {
+      try {
+        window.localStorage.setItem(STORE_FONT, id);
       } catch (error) {
         /* the choice still applies for this page */
       }
@@ -1406,6 +1437,31 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'cd-row-list' },
+            h(
+              'div',
+              { className: 'cd-row' },
+              h('span', { className: 'cd-row-title' }, t('settings.fontSize')),
+              h(
+                'div',
+                { className: 'cd-choices', role: 'group', 'aria-label': t('settings.fontSize') },
+                FONT_IDS.map(function (id) {
+                  const active = props.fontSize === id;
+                  return h(
+                    'button',
+                    {
+                      key: id,
+                      type: 'button',
+                      className: 'cd-choice' + (active ? ' cd-choice-on' : ''),
+                      'aria-pressed': active ? 'true' : 'false',
+                      onClick: function () {
+                        if (props.onFontSizeChange) props.onFontSizeChange(id);
+                      },
+                    },
+                    t('settings.font' + id.charAt(0).toUpperCase() + id.slice(1)),
+                  );
+                }),
+              ),
+            ),
             h(
               'div',
               { className: 'cd-row' },
@@ -2809,7 +2865,11 @@ window.__ModuleLoader__.load({
       const wide = useMedia('(min-width: 768px)');
       const initial = useRef(null);
       if (initial.current === null) {
-        initial.current = Object.assign(loadState(), { tts: loadTts(), drafts: loadDrafts() });
+        initial.current = Object.assign(loadState(), {
+          tts: loadTts(),
+          drafts: loadDrafts(),
+          fontSize: loadFontSize(),
+        });
       }
 
       const [threads, setThreads] = useState(initial.current.threads);
@@ -2832,6 +2892,9 @@ window.__ModuleLoader__.load({
       });
       const [autoRead, setAutoRead] = useState(function () {
         return initial.current.tts.auto;
+      });
+      const [fontSize, setFontSize] = useState(function () {
+        return initial.current.fontSize;
       });
       const [speakingId, setSpeakingId] = useState(null);
       const [exportDir, setExportDir] = useState(function () {
@@ -3982,6 +4045,12 @@ window.__ModuleLoader__.load({
         [autoRead],
       );
 
+      const changeFontSize = useCallback(function (id) {
+        const next = FONT_IDS.indexOf(id) >= 0 ? id : 'standard';
+        setFontSize(next);
+        saveFontSize(next);
+      }, []);
+
       const chooseExportDir = useCallback(function (dir) {
         setExportDir(dir);
         try {
@@ -4305,7 +4374,11 @@ window.__ModuleLoader__.load({
 
       return h(
         'section',
-        { className: 'cd-page', 'aria-label': t('panel.label') },
+        {
+          className: 'cd-page',
+          'aria-label': t('panel.label'),
+          style: { '--cd-text-size': FONT_SIZES[fontSize] || FONT_SIZES.standard },
+        },
         h('style', null, CSS),
         wide && sidebarOpen ? h(Sider, siderProps) : null,
         h(
@@ -4469,6 +4542,8 @@ window.__ModuleLoader__.load({
               exportDir: exportDir,
               voice: ttsVoice,
               onVoiceChange: changeVoice,
+              fontSize: fontSize,
+              onFontSizeChange: changeFontSize,
               onImport: importConversations,
               onExport: exportConversations,
               onListDirectory: listDirectory,
@@ -4529,7 +4604,7 @@ window.__ModuleLoader__.load({
     /* -------------------------------------------------------------------- css */
 
     const CSS = `
-.cd-page{--cd-maxw:840px;--cd-pad:44px;--cd-line:24px;position:relative;box-sizing:border-box;display:flex;width:100%;height:100%;min-height:0;overflow:hidden;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family);font-size:16px;line-height:1.5}
+.cd-page{--cd-maxw:840px;--cd-pad:44px;--cd-text-size:16px;--cd-line:calc(var(--cd-text-size) * 1.5);position:relative;box-sizing:border-box;display:flex;width:100%;height:100%;min-height:0;overflow:hidden;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family);font-size:16px;line-height:1.5}
 @media (max-width:1023px){.cd-page{--cd-maxw:712px;--cd-pad:36px}}
 
 .cd-sider{box-sizing:border-box;display:flex;flex-direction:column;flex-shrink:0;width:261px;height:100%;padding:6px 12px 0;border-right:1px solid var(--dsw-alias-border-l1);background-color:var(--dsw-specific-sidebar-fill)}
@@ -4626,7 +4701,7 @@ window.__ModuleLoader__.load({
 .cd-user{display:flex;flex-direction:column;align-items:flex-end;padding-bottom:16px}
 .cd-user:first-child{padding-top:34px}
 .cd-user-files{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-bottom:8px;max-width:100%}
-.cd-bubble{box-sizing:border-box;max-width:calc(100% - 88px);padding:10px 16px;border-radius:22px;background-color:var(--dsw-specific-bubble);color:var(--dsw-alias-label-primary);font-size:16px;line-height:24px;white-space:pre-wrap;word-break:break-word}
+.cd-bubble{box-sizing:border-box;max-width:calc(100% - 88px);padding:10px 16px;border-radius:22px;background-color:var(--dsw-specific-bubble);color:var(--dsw-alias-label-primary);font-size:var(--cd-text-size);line-height:1.5;white-space:pre-wrap;word-break:break-word}
 @media (max-width:439px){.cd-bubble{max-width:calc(100% - 68px)}}
 .cd-assistant{padding-bottom:24px}
 .cd-actions{display:flex;align-items:center;gap:10px;padding-top:6px;opacity:1}
@@ -4658,7 +4733,7 @@ window.__ModuleLoader__.load({
 .cd-retry{padding:0;border:none;background:transparent;color:var(--dsw-alias-brand-text);font:inherit;font-size:14px;cursor:pointer;text-decoration:underline}
 .cd-stopped{margin-top:6px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
 
-.cd-md{color:var(--dsw-alias-label-primary);font:16px/28px var(--dsw-font-family);overflow-wrap:anywhere}
+.cd-md{color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family);font-size:var(--cd-text-size);line-height:1.75;overflow-wrap:anywhere}
 .cd-md p{margin:16px 0}
 .cd-md>:first-child{margin-top:0}
 .cd-md>:last-child{margin-bottom:0}
@@ -4666,14 +4741,14 @@ window.__ModuleLoader__.load({
 .cd-md ul,.cd-md ol{margin:16px 0;padding-left:18px}
 .cd-md li:not(:first-child){margin-top:6px}
 .cd-md li::marker{color:var(--dsw-alias-label-secondary)}
-.cd-md h3{margin:24px 0 12px;font-size:18px;font-weight:600;line-height:26px}
-.cd-md code{padding:2px 5px;border-radius:6px;background:var(--dsw-alias-markdown-inline-code);font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,monospace);font-size:13px;line-height:22px}
+.cd-md h3{margin:24px 0 12px;font-size:calc(var(--cd-text-size) + 2px);font-weight:600;line-height:calc(var(--cd-text-size) + 10px)}
+.cd-md code{padding:2px 5px;border-radius:6px;background:var(--dsw-alias-markdown-inline-code);font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,monospace);font-size:calc(var(--cd-text-size) - 3px);line-height:calc(var(--cd-text-size) + 6px)}
 .cd-md pre{box-sizing:border-box;margin:16px 0;padding:14px 16px;border-radius:12px;background:var(--dsw-alias-markdown-code-block);overflow-x:auto;overscroll-behavior-inline:contain}
-.cd-md pre code{padding:0;background:transparent;font-size:13px;line-height:22px;white-space:pre}
+.cd-md pre code{padding:0;background:transparent;font-size:calc(var(--cd-text-size) - 3px);line-height:calc(var(--cd-text-size) + 6px);white-space:pre}
 
 .cd-input-area{position:relative;z-index:10;box-sizing:border-box;display:flex;flex-shrink:0;flex-direction:column;align-items:center;padding-bottom:max(4px,env(safe-area-inset-bottom))}
 .cd-input-box{width:calc(var(--cd-maxw) - 64px);max-width:calc(100% - 32px)}
-.cd-composer{box-sizing:border-box;display:flex;flex-direction:column;width:100%;overflow:hidden;border:1px solid var(--dsw-alias-border-l2-darkmode-thin);border-radius:24px;background:var(--dsw-specific-input-major);font-size:16px;line-height:var(--cd-line);cursor:text}
+.cd-composer{box-sizing:border-box;display:flex;flex-direction:column;width:100%;overflow:hidden;border:1px solid var(--dsw-alias-border-l2-darkmode-thin);border-radius:24px;background:var(--dsw-specific-input-major);font-size:var(--cd-text-size);line-height:var(--cd-line);cursor:text}
 .cd-composer-home{box-shadow:0 4px 12px rgba(0,0,0,.02),0 2px 2px rgba(72,104,178,.01),0 30px 60px rgba(72,104,178,.03)}
 .cd-composer-session{box-shadow:0 4px 10px rgba(0,0,0,.02),0 2px 4px rgba(0,0,0,.04)}
 [data-ds-dark-theme] .cd-composer-home{box-shadow:none}

@@ -1083,6 +1083,38 @@ async function main() {
     console.log('PASS 25: a user message can be edited and re-answered');
   }
 
+  /* --- 26. text size setting drives the --cd-text-size variable ------------ */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    const pageStyle = () => byClass(tree, 'cd-page')[0].props.style || {};
+    assert(pageStyle()['--cd-text-size'] === '16px', 'standard is the default text size');
+    click(byClass(tree, 'cd-settings')[0]);
+    tree = rerender();
+    const choices = byClass(tree, 'cd-choice');
+    assert(choices.length === 3, 'three text sizes are offered, got ' + choices.length);
+    const labels = choices.map((node) => textOf(node).trim());
+    assert(
+      JSON.stringify(labels) === JSON.stringify(['小', '标准', '大']),
+      'the text size labels are 小/标准/大, got ' + JSON.stringify(labels),
+    );
+    click(choices[0]);
+    tree = rerender();
+    assert(pageStyle()['--cd-text-size'] === '14px', 'small sets the variable to 14px');
+    click(byClass(tree, 'cd-choice')[2]);
+    tree = rerender();
+    assert(pageStyle()['--cd-text-size'] === '18px', 'large sets the variable to 18px');
+    assert(session.storage.get('deepseek-chat-ui.font.v1') === 'large', 'the choice is persisted');
+    unmount();
+    const reopened = mount(snapshot(session));
+    const tree2 = renderPanel(reopened);
+    assert(
+      byClass(tree2, 'cd-page')[0].props.style['--cd-text-size'] === '18px',
+      'the saved text size is restored on reload',
+    );
+    console.log('PASS 26: text size setting drives --cd-text-size');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 
