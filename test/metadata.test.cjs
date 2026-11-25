@@ -39,6 +39,18 @@ if (pkg) {
   requireFile('README.md', 'readme');
   requireFile('LICENSE', 'license');
 
+  const clientPath = path.join(ROOT, 'client.js');
+  if (fs.existsSync(clientPath)) {
+    const version = fs.readFileSync(clientPath, 'utf8').match(/const PLUGIN_VERSION = '([^']+)';/);
+    if (!version) {
+      failures.push('client.js should declare PLUGIN_VERSION for the settings footer');
+    } else if (version[1] !== pkg.version) {
+      failures.push(
+        'client.js PLUGIN_VERSION (' + version[1] + ') should match package.json version (' + pkg.version + ')',
+      );
+    }
+  }
+
   if (pkg.license !== 'MIT') failures.push('package.json license should be MIT');
   if (pkg.private === true) failures.push('package.json must not be private for a public bundle');
   if (!pkg.dsh || !pkg.dsh.bundle || !pkg.dsh.bundle.patch) {

@@ -1115,6 +1115,24 @@ async function main() {
     console.log('PASS 26: text size setting drives --cd-text-size');
   }
 
+  /* --- 27. the settings footer shows the version and the repo link --------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-settings')[0]);
+    tree = rerender();
+    const foot = byClass(tree, 'cd-settings-foot')[0];
+    assert(foot, 'the settings footer is rendered');
+    const footText = textOf(foot).replace(/\s+/g, '');
+    assert(/^v\d+\.\d+\.\d+·GitHub$/.test(footText), 'the footer reads vX.Y.Z · GitHub: ' + footText);
+    const link = byClass(foot, 'cd-settings-repo')[0];
+    assert(link && link.type === 'a', 'the GitHub label is a link');
+    assert(link.props.href === 'https://github.com/AlphaAntivoid/dsh-chat-replica', 'the link targets the repository');
+    assert(link.props.target === '_blank', 'the link opens in a new tab');
+    assert(link.props.rel === 'noreferrer', 'the link sets rel=noreferrer');
+    console.log('PASS 27: settings footer shows the version and repository link');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 

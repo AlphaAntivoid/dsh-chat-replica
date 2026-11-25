@@ -3,6 +3,18 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.10.0
+
+### 中文
+
+- 设置面板底部显示版本与仓库链接（`vX.Y.Z · GitHub`），GitHub 在新标签打开
+- 版本号常量 `PLUGIN_VERSION` 与 `package.json` 的 `version` 对齐，元数据测试会在两者不一致时失败
+
+### English
+
+- The settings panel footer now shows the version and a repository link (`vX.Y.Z · GitHub`), with GitHub opening in a new tab
+- The `PLUGIN_VERSION` constant is checked against `package.json`'s `version` by the metadata test
+
 ## 1.9.0
 
 ### 中文

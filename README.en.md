@@ -48,6 +48,7 @@ Light theme:
 - Settings panel with two swipeable tabs:
   - General: theme (light / dark / follow system), text size (small / standard / large, 14 / 16 / 18 px, affecting message text and the composer only), language (Simplified Chinese / English, which also switches the DSH UI language), read-aloud voice and auto-read
   - Data: import history, export history, export folder, delete all conversations
+  - The footer shows the version and a GitHub repository link (opened in a new tab)
 - Conversation list actions behind the "⋯" on each row: rename, pin, multi-select (bulk pin / delete), delete with confirmation
 
 ### Conversation list menu

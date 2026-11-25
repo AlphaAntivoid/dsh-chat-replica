@@ -12,6 +12,9 @@ window.__ModuleLoader__.load({
     const PANEL_ID = 'deepseek-chat-ui';
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
+    /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
+    const PLUGIN_VERSION = '1.10.0';
+    const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
     const STORE_DRAFTS = 'deepseek-chat-ui.drafts.v1';
@@ -1765,6 +1768,24 @@ window.__ModuleLoader__.load({
                     h('div', { className: 'cd-pane-slot' }, renderGeneral()),
                     h('div', { className: 'cd-pane-slot' }, renderData()),
                   ),
+                ),
+              ),
+          view === 'browse'
+            ? null
+            : h(
+                'footer',
+                { className: 'cd-settings-foot' },
+                h('span', null, 'v' + PLUGIN_VERSION),
+                h('span', { 'aria-hidden': 'true' }, '·'),
+                h(
+                  'a',
+                  {
+                    className: 'cd-settings-repo',
+                    href: REPO_URL,
+                    target: '_blank',
+                    rel: 'noreferrer',
+                  },
+                  'GitHub',
                 ),
               ),
           menu !== null
@@ -4844,6 +4865,9 @@ body[data-ds-dark-theme] .cd-send:disabled{opacity:.55}
 .cd-sheet-head{display:flex;flex-shrink:0;align-items:center;justify-content:space-between;gap:8px;padding:14px 12px 6px 18px}
 .cd-sheet-title{margin:0;font-size:16px;font-weight:600;line-height:24px;color:var(--dsw-alias-label-primary)}
 .cd-sheet-body{overflow-y:auto;overscroll-behavior:contain;padding:4px 18px 18px}
+.cd-settings-foot{display:flex;flex-shrink:0;align-items:center;justify-content:center;gap:6px;padding:10px 18px 14px;border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
+.cd-settings-repo{color:var(--dsw-alias-label-tertiary);text-decoration:none}
+.cd-settings-repo:hover{color:var(--dsw-alias-brand-text);text-decoration:underline}
 .cd-group+.cd-group{margin-top:18px}
 .cd-group-title{padding-bottom:8px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
 .cd-choices{display:flex;flex-wrap:wrap;gap:8px}
