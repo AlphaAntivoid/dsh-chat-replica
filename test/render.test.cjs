@@ -577,7 +577,7 @@ async function main() {
     tree = rerender();
     click(byClass(tree, 'cd-item')[1]);
     tree = rerender();
-    click(byClass(tree, 'cd-multibar-btn')[1]);
+    click(byClass(tree, 'cd-multibar-btn')[2]);
     tree = rerender();
     assert(byClass(tree, 'cd-delete-confirm').length === 1, 'bulk delete asks for confirmation');
     assert(
@@ -593,7 +593,7 @@ async function main() {
     assert(byClass(tree, 'cd-delete-confirm').length === 0, 'cancel dismisses the confirmation');
     assert(byClass(tree, 'cd-item').length === 5, 'nothing deleted after cancel');
 
-    click(byClass(tree, 'cd-multibar-btn')[1]);
+    click(byClass(tree, 'cd-multibar-btn')[2]);
     tree = rerender();
     click(byClass(tree, 'cd-confirm-pill-danger')[0]);
     tree = rerender();
@@ -753,6 +753,112 @@ async function main() {
     tree = rerender();
     assert(byClass(tree, 'cd-item').length === 5, 'clearing the query restores every conversation');
     console.log('PASS 12: conversation search filters the list');
+  }
+
+  /* --- 13. the row menu is keyboard navigable ------------------------------ */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    let items = byClass(tree, 'cd-session-menu-item');
+    assert(items.length === 4, 'the menu has four items');
+    assert(items[0].dom.focused === true, 'the first item takes focus when the menu opens');
+    const menu = byClass(tree, 'cd-session-menu')[0];
+    const key = (name) => menu.props.onKeyDown({ key: name, preventDefault() {}, stopPropagation() {} });
+    key('ArrowDown');
+    items = byClass(tree, 'cd-session-menu-item');
+    assert(items[1].dom.focused === true, 'ArrowDown moves to the next item');
+    key('ArrowUp');
+    items = byClass(tree, 'cd-session-menu-item');
+    assert(items[0].dom.focused === true, 'ArrowUp moves back');
+    key('End');
+    items = byClass(tree, 'cd-session-menu-item');
+    assert(items[3].dom.focused === true, 'End jumps to the last item');
+    key('Home');
+    items = byClass(tree, 'cd-session-menu-item');
+    assert(items[0].dom.focused === true, 'Home jumps to the first item');
+    console.log('PASS 13: the conversation menu navigates with the keyboard');
+  }
+
+  /* --- 14. Escape leaves multi-select -------------------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[2]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-multibar').length === 1, 'multi-select is active');
+    emitDocument('keydown', { key: 'Escape' });
+    tree = rerender();
+    assert(byClass(tree, 'cd-multibar').length === 0, 'Escape leaves multi-select');
+    console.log('PASS 14: Escape leaves multi-select');
+  }
+
+  /* --- 15. select all / clear all ------------------------------------------ */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[2]);
+    tree = rerender();
+    const selectAll = findByText(tree, '全选')[0];
+    assert(selectAll, 'the select-all control is rendered');
+    click(selectAll);
+    tree = rerender();
+    assert(
+      textOf(byClass(tree, 'cd-multibar-count')[0]).trim() === '已选 5 个',
+      'select all selects every conversation: ' + textOf(byClass(tree, 'cd-multibar-count')[0]),
+    );
+    const clearAll = findByText(tree, '取消全选')[0];
+    assert(clearAll, 'the control flips to clear-all when everything is selected');
+    click(clearAll);
+    tree = rerender();
+    assert(
+      textOf(byClass(tree, 'cd-multibar-count')[0]).trim() === '已选 0 个',
+      'clear-all deselects everything',
+    );
+    console.log('PASS 15: select all and clear all');
+  }
+
+  /* --- 16. rows support F2 and Delete -------------------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    const key = (name) => byClass(tree, 'cd-item')[0].props.onKeyDown({
+      key: name,
+      preventDefault() {},
+      stopPropagation() {},
+    });
+    key('F2');
+    tree = rerender();
+    assert(byClass(tree, 'cd-dialog').length === 1, 'F2 opens the rename dialog');
+    click(byClass(tree, 'cd-btn')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-dialog').length === 0, 'the rename dialog closes again');
+    key('Delete');
+    tree = rerender();
+    assert(byClass(tree, 'cd-delete-confirm').length === 1, 'Delete opens the delete confirmation');
+    console.log('PASS 16: F2 renames and Delete asks to delete');
+  }
+
+  /* --- 17. bulk export reports through the toast --------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[2]);
+    tree = rerender();
+    const exportAll = findByText(tree, '导出')[0];
+    assert(exportAll, 'the bulk export control is rendered');
+    click(exportAll);
+    await wait(60);
+    tree = rerender();
+    assert(byClass(tree, 'cd-toast').length === 1, 'the export result is announced in the toast');
+    console.log('PASS 17: bulk export reports its result');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

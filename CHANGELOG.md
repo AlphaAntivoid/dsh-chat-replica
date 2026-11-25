@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.2.0
+
+### 中文
+
+- 多选增强：支持全选 / 取消全选（作用于当前筛选结果）、批量导出选中会话，Esc 直接退出多选
+- 键盘可达性：菜单打开即聚焦第一项，方向键 / Home / End 在四项间移动；行上 F2 重命名、Delete 删除
+- 对话框把 Tab / Shift+Tab 限制在框内，关闭后焦点回到原来的控件
+- 选中数量的变化通过 `aria-live` 播报
+
+### English
+
+- Multi-select gains select-all / clear-all (scoped to the current filter), bulk export of the selected conversations, and Escape to leave
+- Keyboard support: opening the menu focuses its first row, Arrow keys / Home / End move between rows, F2 renames and Delete deletes from a focused conversation
+- Dialogs trap Tab / Shift+Tab inside themselves and restore focus to the previous control on close
+- The selection count is announced through `aria-live`
+
 ## 1.1.0
 
 ### 中文

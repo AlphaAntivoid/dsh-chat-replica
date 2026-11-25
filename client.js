@@ -141,6 +141,9 @@ window.__ModuleLoader__.load({
       'select.unpin': '取消置顶',
       'select.delete': '删除',
       'select.exit': '取消',
+      'select.all': '全选',
+      'select.none': '取消全选',
+      'select.export': '导出',
     };
 
     const en = {
@@ -258,6 +261,9 @@ window.__ModuleLoader__.load({
       'select.unpin': 'Unpin',
       'select.delete': 'Delete',
       'select.exit': 'Cancel',
+      'select.all': 'Select all',
+      'select.none': 'Clear',
+      'select.export': 'Export',
     };
 
     /* ----------------------------------------------------------- seed content */
@@ -420,6 +426,11 @@ window.__ModuleLoader__.load({
       search: [
         ['circle', { cx: 11, cy: 11, r: 6.2 }],
         ['path', { d: 'M15.6 15.6L20 20' }],
+      ],
+      download: [
+        ['path', { d: 'M12 4v11' }],
+        ['path', { d: 'M7.5 10.5L12 15l4.5-4.5' }],
+        ['path', { d: 'M4.5 18.5h15' }],
       ],
       chevronLeft: [['path', { d: 'M14.5 6l-6 6 6 6' }]],
       chevronDown: [['path', { d: 'M6 9.5l6 6 6-6' }]],
@@ -1751,6 +1762,17 @@ window.__ModuleLoader__.load({
           });
           return thread !== undefined && typeof thread.pinnedAt === 'number';
         });
+      /** 「全选」作用于当前筛选结果，而不是全部会话。 */
+      const visibleIds = visibleThreads.map(function (thread) {
+        return thread.id;
+      });
+      const allVisibleSelected =
+        visibleIds.length > 0 &&
+        visibleIds.every(function (id) {
+          return isChecked(id);
+        });
+      const menuItemRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
+      const menuFocusRef = useRef(0);
 
       /** 菜单在页面根节点内绝对定位，因此能越过列表的滚动裁剪；点外部、Esc、缩放和滚动都会收起。 */
       useEffect(
@@ -1782,6 +1804,35 @@ window.__ModuleLoader__.load({
         },
         [menu],
       );
+
+      /** 菜单打开后把焦点放到第一项，之后由方向键在项间移动。 */
+      useEffect(
+        function () {
+          if (menu === null) return;
+          menuFocusRef.current = 0;
+          const first = menuItemRefs[0].current;
+          if (first && first.focus) first.focus();
+        },
+        [menu],
+      );
+
+      const onMenuKeyDown = function (event) {
+        const items = menuItemRefs
+          .map(function (ref) {
+            return ref.current;
+          })
+          .filter(Boolean);
+        if (items.length === 0) return;
+        let next = -1;
+        if (event.key === 'ArrowDown') next = (menuFocusRef.current + 1) % items.length;
+        else if (event.key === 'ArrowUp') next = (menuFocusRef.current - 1 + items.length) % items.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = items.length - 1;
+        if (next < 0) return;
+        event.preventDefault();
+        menuFocusRef.current = next;
+        if (items[next].focus) items[next].focus();
+      };
 
       const openMenu = function (event, thread) {
         event.preventDefault();
@@ -1859,13 +1910,28 @@ window.__ModuleLoader__.load({
                 { className: 'cd-multibar-top' },
                 h(
                   'span',
-                  { className: 'cd-multibar-count' },
+                  { className: 'cd-multibar-count', 'aria-live': 'polite' },
                   t('select.count').replace('{count}', String(selectedIds.length)),
                 ),
                 h(
-                  'button',
-                  { type: 'button', className: 'cd-textbtn', onClick: props.onExitSelect },
-                  t('select.exit'),
+                  'div',
+                  { className: 'cd-multibar-tools' },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'cd-textbtn',
+                      onClick: function () {
+                        props.onSetSelection(allVisibleSelected ? [] : visibleIds.slice());
+                      },
+                    },
+                    allVisibleSelected ? t('select.none') : t('select.all'),
+                  ),
+                  h(
+                    'button',
+                    { type: 'button', className: 'cd-textbtn', onClick: props.onExitSelect },
+                    t('select.exit'),
+                  ),
                 ),
               ),
               h(
@@ -1881,6 +1947,17 @@ window.__ModuleLoader__.load({
                   },
                   h(Icon, { name: allPinned ? 'pinOff' : 'pin', size: 15 }),
                   h('span', null, allPinned ? t('select.unpin') : t('select.pin')),
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'cd-multibar-btn',
+                    disabled: selectedIds.length === 0,
+                    onClick: props.onBulkExport,
+                  },
+                  h(Icon, { name: 'download', size: 15 }),
+                  h('span', null, t('select.export')),
                 ),
                 h(
                   'button',
@@ -1980,6 +2057,16 @@ window.__ModuleLoader__.load({
                         else props.onSelect(thread.id);
                       },
                       onKeyDown: function (event) {
+                        if (!selecting && event.key === 'F2') {
+                          event.preventDefault();
+                          props.onRename(thread);
+                          return;
+                        }
+                        if (!selecting && event.key === 'Delete') {
+                          event.preventDefault();
+                          props.onDelete(thread);
+                          return;
+                        }
                         if (event.key !== 'Enter' && event.key !== ' ') return;
                         event.preventDefault();
                         if (selecting) props.onToggleSelect(thread.id);
@@ -2037,12 +2124,14 @@ window.__ModuleLoader__.load({
                 role: 'menu',
                 'aria-label': t('menu.open'),
                 style: { top: menu.top + 'px', left: menu.left + 'px' },
+                onKeyDown: onMenuKeyDown,
               },
               h(
                 'button',
                 {
                   type: 'button',
                   role: 'menuitem',
+                  ref: menuItemRefs[0],
                   className: 'cd-session-menu-item',
                   onClick: function () {
                     run(props.onRename);
@@ -2056,6 +2145,7 @@ window.__ModuleLoader__.load({
                 {
                   type: 'button',
                   role: 'menuitem',
+                  ref: menuItemRefs[1],
                   className: 'cd-session-menu-item',
                   onClick: function () {
                     run(props.onTogglePin);
@@ -2076,6 +2166,7 @@ window.__ModuleLoader__.load({
                 {
                   type: 'button',
                   role: 'menuitem',
+                  ref: menuItemRefs[2],
                   className: 'cd-session-menu-item',
                   onClick: function () {
                     run(props.onMulti);
@@ -2090,6 +2181,7 @@ window.__ModuleLoader__.load({
                 {
                   type: 'button',
                   role: 'menuitem',
+                  ref: menuItemRefs[3],
                   className: 'cd-session-menu-item cd-session-menu-danger',
                   onClick: function () {
                     run(props.onDelete);
@@ -2107,12 +2199,22 @@ window.__ModuleLoader__.load({
       const t = props.t;
       const [draft, setDraft] = useState(props.initial || '');
       const inputRef = useRef(null);
+      const cancelRef = useRef(null);
+      const saveRef = useRef(null);
+      const restoreRef = useRef(null);
       useEffect(
         function () {
+          restoreRef.current = document.activeElement;
           const element = inputRef.current;
-          if (!element) return;
-          element.focus();
-          if (element.select) element.select();
+          if (element) {
+            element.focus();
+            if (element.select) element.select();
+          }
+          return function () {
+            // 关闭后把焦点还给打开对话框的控件（键盘用户不会掉焦点）。
+            const previous = restoreRef.current;
+            if (previous && previous.focus) previous.focus();
+          };
         },
         [],
       );
@@ -2121,6 +2223,24 @@ window.__ModuleLoader__.load({
       const save = function () {
         if (blocked) return;
         props.onSave(trimmed);
+      };
+      /** 把 Tab / Shift+Tab 限制在对话框内，避免焦点跑到背后的页面上。 */
+      const onDialogKeyDown = function (event) {
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          props.onCancel();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const fields = [inputRef.current, cancelRef.current, saveRef.current].filter(function (element) {
+          return element !== null && element !== undefined;
+        });
+        if (fields.length === 0) return;
+        const index = fields.indexOf(event.target);
+        if (index < 0) return;
+        event.preventDefault();
+        const next = event.shiftKey ? (index - 1 + fields.length) % fields.length : (index + 1) % fields.length;
+        if (fields[next].focus) fields[next].focus();
       };
       return h(
         'div',
@@ -2133,12 +2253,7 @@ window.__ModuleLoader__.load({
             role: 'dialog',
             'aria-modal': 'true',
             'aria-label': t('rename.title'),
-            onKeyDown: function (event) {
-              if (event.key === 'Escape') {
-                event.stopPropagation();
-                props.onCancel();
-              }
-            },
+            onKeyDown: onDialogKeyDown,
           },
           h('h3', { className: 'cd-dialog-title' }, t('rename.title')),
           h('input', {
@@ -2162,12 +2277,13 @@ window.__ModuleLoader__.load({
             { className: 'cd-dialog-actions' },
             h(
               'button',
-              { type: 'button', className: 'cd-btn', onClick: props.onCancel },
+              { ref: cancelRef, type: 'button', className: 'cd-btn', onClick: props.onCancel },
               t('action.cancel'),
             ),
             h(
               'button',
               {
+                ref: saveRef,
                 type: 'button',
                 className: 'cd-btn cd-btn-primary',
                 disabled: blocked,
@@ -2188,12 +2304,37 @@ window.__ModuleLoader__.load({
       const t = props.t;
       const count = props.count;
       const cancelRef = useRef(null);
+      const dangerRef = useRef(null);
+      const restoreRef = useRef(null);
       useEffect(
         function () {
+          restoreRef.current = document.activeElement;
           if (cancelRef.current) cancelRef.current.focus();
+          return function () {
+            const previous = restoreRef.current;
+            if (previous && previous.focus) previous.focus();
+          };
         },
         [],
       );
+      /** Esc 取消；Tab / Shift+Tab 只在两个按钮之间循环。 */
+      const onDialogKeyDown = function (event) {
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          props.onCancel();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const fields = [cancelRef.current, dangerRef.current].filter(function (element) {
+          return element !== null && element !== undefined;
+        });
+        if (fields.length === 0) return;
+        const index = fields.indexOf(event.target);
+        if (index < 0) return;
+        event.preventDefault();
+        const next = event.shiftKey ? (index - 1 + fields.length) % fields.length : (index + 1) % fields.length;
+        if (fields[next].focus) fields[next].focus();
+      };
       const title =
         count > 1 ? t('delete.titleMulti').replace('{count}', String(count)) : t('delete.title');
       const action =
@@ -2209,12 +2350,7 @@ window.__ModuleLoader__.load({
             role: 'alertdialog',
             'aria-modal': 'true',
             'aria-label': title,
-            onKeyDown: function (event) {
-              if (event.key === 'Escape') {
-                event.stopPropagation();
-                props.onCancel();
-              }
-            },
+            onKeyDown: onDialogKeyDown,
           },
           h('h3', { className: 'cd-delete-title' }, title),
           h(
@@ -2232,7 +2368,12 @@ window.__ModuleLoader__.load({
             ),
             h(
               'button',
-              { type: 'button', className: 'cd-confirm-pill cd-confirm-pill-danger', onClick: props.onConfirm },
+              {
+                ref: dangerRef,
+                type: 'button',
+                className: 'cd-confirm-pill cd-confirm-pill-danger',
+                onClick: props.onConfirm,
+              },
               action,
             ),
           ),
@@ -3330,6 +3471,21 @@ window.__ModuleLoader__.load({
         setSelectedIds([]);
       }, []);
 
+      /** 多选模式下按 Esc 退出；对话框和搜索框会先消费自己的 Esc。 */
+      useEffect(
+        function () {
+          if (!selecting) return undefined;
+          const onKeyDown = function (event) {
+            if (event.key === 'Escape') exitSelect();
+          };
+          document.addEventListener('keydown', onKeyDown);
+          return function () {
+            document.removeEventListener('keydown', onKeyDown);
+          };
+        },
+        [selecting, exitSelect],
+      );
+
       const toggleSelect = useCallback(function (id) {
         setSelectedIds(function (previous) {
           return previous.indexOf(id) >= 0
@@ -3392,12 +3548,13 @@ window.__ModuleLoader__.load({
       );
 
       const exportConversations = useCallback(
-        async function (dir) {
+        async function (dir, list) {
+          const source = Array.isArray(list) ? list : threads;
           const attempt = async function () {
             const response = await fetch(`${API}/export`, {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ threads: threads.map(exportThread), dir: dir }),
+              body: JSON.stringify({ threads: source.map(exportThread), dir: dir }),
             });
             const text = await response.text();
             let body = {};
@@ -3423,6 +3580,23 @@ window.__ModuleLoader__.load({
           }
         },
         [threads, t],
+      );
+
+      /** 多选导出：只导出选中的会话，写入当前「导出位置」。 */
+      const exportSelected = useCallback(
+        async function () {
+          const chosen = threads.filter(function (thread) {
+            return selectedIds.indexOf(thread.id) >= 0;
+          });
+          if (chosen.length === 0) return;
+          const result = await exportConversations(exportDir, chosen);
+          showToast(result.text);
+          if (result.ok) {
+            setSelecting(false);
+            setSelectedIds([]);
+          }
+        },
+        [threads, selectedIds, exportDir, exportConversations, showToast],
       );
 
       const listDirectory = useCallback(
@@ -3699,7 +3873,9 @@ window.__ModuleLoader__.load({
         selected: selectedIds,
         onToggleSelect: toggleSelect,
         onExitSelect: exitSelect,
+        onSetSelection: setSelectedIds,
         onBulkPin: pinSelected,
+        onBulkExport: exportSelected,
         onBulkDelete: requestDeleteSelected,
         onCollapse: function () {
           setSidebarOpen(false);
@@ -3947,6 +4123,7 @@ window.__ModuleLoader__.load({
 .cd-check-on{border-color:var(--dsw-alias-brand-primary);background-color:var(--dsw-alias-brand-primary)}
 .cd-multibar{display:flex;flex-shrink:0;flex-direction:column;gap:8px;padding:10px 10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:var(--dsw-alias-bg-layer-2)}
 .cd-multibar-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cd-multibar-tools{display:flex;flex-shrink:0;align-items:center;gap:8px}
 .cd-multibar-count{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px}
 .cd-multibar-actions{display:flex;gap:8px}
 .cd-multibar-btn{box-sizing:border-box;display:inline-flex;flex:1;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background-color .15s}
