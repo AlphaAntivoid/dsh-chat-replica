@@ -64,8 +64,12 @@
 
 ## 安装
 
-本仓库就是插件包本体（`package.json` 在根目录）。DSH 的 Plugin Manager 接受「根目录包着一层文件夹」的
-tarball，所以先打包：
+最快的方式：从 [Releases](https://github.com/AlphaAntivoid/dsh-chat-replica/releases/latest) 下载
+`dsh-chat-replica-1.0.0.tar.gz`，然后打开 DSH → **插件 → 安装 → 选择该 tar.gz**，刷新页面，
+侧栏会出现面板图标「对话模式」，点开即占满中间面板。
+
+也可以自己从源码打包（本仓库就是插件包本体，`package.json` 在根目录；Plugin Manager 接受
+「根目录包着一层文件夹」的 tarball）：
 
 ```sh
 git clone https://github.com/AlphaAntivoid/dsh-chat-replica.git
@@ -73,8 +77,7 @@ cd ..
 tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
 ```
 
-然后在 DSH 里：**插件 → 安装 → 选择这个 tar.gz**，安装完成后刷新页面。侧栏会出现面板图标「对话模式」，
-点开即占满中间面板。
+再在 DSH 里安装这个 `dsh-chat-replica.tar.gz`。
 
 ### 手动安装
 
