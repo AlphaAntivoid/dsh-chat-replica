@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek 对话界面复刻",
+    "description": "按 chat-demo 前端复刻的对话页：会话侧栏、欢迎语、输入框与消息气泡，并跟随 DSH 的浅色/深色主题。"
+  }
+}

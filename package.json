@@ -1,0 +1,52 @@
+{
+  "name": "@local/deepseek-chat-ui",
+  "version": "1.0.0",
+  "description": "DeepSeek chat-demo style conversation page for the DeepSeek Harness (DSH) Web UI",
+  "license": "MIT",
+  "author": "AlphaAntivoid",
+  "homepage": "https://github.com/AlphaAntivoid/dsh-chat-replica#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlphaAntivoid/dsh-chat-replica.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AlphaAntivoid/dsh-chat-replica/issues"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "dsh-bundle",
+    "chat-ui"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  }
+}

@@ -1,0 +1,3 @@
+- insert:
+    - id: deepseek-chat-ui
+      name: '@local/deepseek-chat-ui'

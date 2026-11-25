@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+
+# build artifacts of the plugin bundle
+*.tar.gz
+*.tgz
+*.zip
+
+# local logs and OS noise
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editor and tooling
+.vscode/
+.idea/
+*.swp

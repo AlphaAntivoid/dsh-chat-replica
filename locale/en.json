@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek Chat Interface Replica",
+    "description": "A conversation page copied from the chat-demo frontend: session sidebar, greeting, composer and message bubbles, following the DSH light/dark theme."
+  }
+}

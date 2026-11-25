@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="DeepSeek chat replica">
+  <defs>
+    <linearGradient id="cd-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5b7cff"/>
+      <stop offset="1" stop-color="#2440c8"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#cd-bg)"/>
+  <path d="M18 25.5C18 21.9 20.7 19 24.4 19h15.2C43.3 19 46 21.9 46 25.5v8.2c0 3.6-2.7 6.5-6.4 6.5H31l-7.9 5.4c-.9.6-2.1 0-2.1-1.1v-5.1c-1.8-.8-3-2.6-3-4.7v-9.2Z" fill="#ffffff" fill-opacity="0.96"/>
+  <path d="M25 28.5h14M25 33.5h9" stroke="#3b57e0" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="47" cy="17" r="4.4" fill="#9ff0d2"/>
+</svg>
