@@ -2,6 +2,8 @@
 node_modules/
 
 # build artifacts of the plugin bundle
+dist/
+release-notes.md
 *.tar.gz
 *.tgz
 *.zip

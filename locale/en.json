@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "DeepSeek Chat Interface Replica",
-    "description": "A conversation page copied from the chat-demo frontend: session sidebar, greeting, composer and message bubbles, following the DSH light/dark theme."
+    "description": "A DeepSeek chat-demo style conversation page for DSH: session sidebar, message bubbles, composer, upload and voice input, read-aloud, following the DSH theme. Open it from the sidebar panel icon “Chat mode”.",
+    "detail": "docs/DETAIL.md"
   }
 }

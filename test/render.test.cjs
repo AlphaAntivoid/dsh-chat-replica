@@ -1,0 +1,709 @@
+/**
+ * Headless render test for the plugin's browser bundle (client.js).
+ *
+ * The bundle is a browser module that calls window.__ModuleLoader__.load and
+ * uses a small React subset, so this script provides a minimal hook runtime,
+ * a fake DOM, and a fake Cordis context, then drives real click handlers.
+ */
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
+const FILE = process.env.PLUGIN_FILE || path.join(__dirname, '..', 'client.js');
+const SOURCE = fs.readFileSync(FILE, 'utf8');
+
+/* ------------------------------------------------------------- React subset */
+
+let instances = new Map();
+let domCache = new Map();
+let currentInst = null;
+let renderRoot = null;
+let dirty = false;
+let rendering = false;
+
+function sameDeps(a, b) {
+  if (a === undefined || a === null || b === undefined || b === null) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (!Object.is(a[i], b[i])) return false;
+  return true;
+}
+
+const React = {
+  createElement(type, props, ...children) {
+    const flat = [];
+    const push = (child) => {
+      if (Array.isArray(child)) child.forEach(push);
+      else if (child !== undefined) flat.push(child);
+    };
+    children.forEach(push);
+    const next = props ? Object.assign({}, props) : {};
+    if (flat.length === 1) next.children = flat[0];
+    else if (flat.length > 1) next.children = flat;
+    return { type, props: next };
+  },
+  useState(init) {
+    const inst = currentInst;
+    const index = inst.index++;
+    if (!(index in inst.hooks)) inst.hooks[index] = typeof init === 'function' ? init() : init;
+    const setter = (value) => {
+      const next = typeof value === 'function' ? value(inst.hooks[index]) : value;
+      if (Object.is(next, inst.hooks[index])) return;
+      inst.hooks[index] = next;
+      dirty = true;
+      if (!rendering) rerender();
+    };
+    return [inst.hooks[index], setter];
+  },
+  useEffect(fn, deps) {
+    const inst = currentInst;
+    const index = inst.index++;
+    const prev = inst.effects[index];
+    if (!prev || !sameDeps(prev.deps, deps)) inst.pending.push({ index, fn, deps });
+  },
+  useMemo(fn, deps) {
+    const inst = currentInst;
+    const index = inst.index++;
+    const prev = inst.memos[index];
+    if (!prev || !sameDeps(prev.deps, deps)) inst.memos[index] = { value: fn(), deps };
+    return inst.memos[index].value;
+  },
+  useCallback(fn, deps) {
+    return React.useMemo(() => fn, deps);
+  },
+  useRef(init) {
+    const inst = currentInst;
+    const index = inst.index++;
+    if (!(index in inst.hooks)) inst.hooks[index] = { current: init === undefined ? null : init };
+    return inst.hooks[index];
+  },
+};
+
+/* ------------------------------------------------------------------ fake DOM */
+
+const pageDom = {
+  style: {},
+  className: 'cd-page',
+  scrollHeight: 900,
+  scrollTop: 0,
+  focus() {},
+  select() {},
+  closest() {
+    return pageDom;
+  },
+  getBoundingClientRect() {
+    return { left: 0, top: 0, right: 1280, bottom: 900, width: 1280, height: 900 };
+  },
+  contains() {
+    return false;
+  },
+};
+
+function makeDom(element) {
+  const dom = {
+    element,
+    style: {},
+    className: typeof element.props.className === 'string' ? element.props.className : '',
+    scrollHeight: 120,
+    scrollTop: 0,
+    focused: false,
+    selected: false,
+    focus() {
+      dom.focused = true;
+    },
+    select() {
+      dom.selected = true;
+    },
+    closest(selector) {
+      if (selector !== '.cd-page') return null;
+      return pageDom;
+    },
+    getBoundingClientRect() {
+      return { left: 12, top: 240, right: 249, bottom: 280, width: 237, height: 40 };
+    },
+    contains() {
+      return false;
+    },
+  };
+  return dom;
+}
+
+/* --------------------------------------------------------------- render core */
+
+function renderTree(node, pathKey) {
+  if (node === null || node === undefined || typeof node === 'boolean') return null;
+  if (typeof node === 'string' || typeof node === 'number') return { kind: 'text', text: String(node) };
+  if (Array.isArray(node)) {
+    return node.map((child, index) => renderTree(child, pathKey + '/' + index)).filter(Boolean);
+  }
+  const type = node.type;
+  if (typeof type === 'function') {
+    const key = pathKey + ':' + (type.name || 'anon');
+    let inst = instances.get(key);
+    if (!inst) {
+      inst = { hooks: [], effects: [], memos: [], index: 0, pending: [], key };
+      instances.set(key, inst);
+    }
+    const previous = currentInst;
+    currentInst = inst;
+    inst.index = 0;
+    let output;
+    try {
+      output = type(node.props);
+    } finally {
+      currentInst = previous;
+    }
+    return renderTree(output, key);
+  }
+  const children = node.props.children === undefined ? [] : renderTree(node.props.children, pathKey + '/c');
+  const list = Array.isArray(children) ? children : children ? [children] : [];
+  const element = { kind: 'host', type, props: node.props, children: list };
+  // DOM nodes keep identity across renders, like the real reconciler.
+  let dom = domCache.get(pathKey);
+  if (!dom) {
+    dom = makeDom(element);
+    domCache.set(pathKey, dom);
+  }
+  dom.element = element;
+  dom.className = typeof node.props.className === 'string' ? node.props.className : '';
+  element.dom = dom;
+  if (node.props.ref) node.props.ref.current = dom;
+  return element;
+}
+
+function commitEffects() {
+  for (const inst of instances.values()) {
+    if (!inst.pending || inst.pending.length === 0) continue;
+    const pending = inst.pending;
+    inst.pending = [];
+    for (const job of pending) {
+      const prev = inst.effects[job.index];
+      if (prev && typeof prev.cleanup === 'function') {
+        try {
+          prev.cleanup();
+        } catch (error) {
+          /* cleanup failures must not hide the render result */
+        }
+      }
+      const cleanup = job.fn();
+      inst.effects[job.index] = { deps: job.deps, cleanup };
+    }
+  }
+}
+
+function rerender() {
+  if (!renderRoot) throw new Error('nothing mounted');
+  rendering = true;
+  try {
+    let tree = null;
+    let guard = 0;
+    do {
+      dirty = false;
+      for (const inst of instances.values()) inst.pending = [];
+      tree = renderTree(renderRoot.element, 'root');
+      commitEffects();
+      guard += 1;
+    } while (dirty && guard < 60);
+    if (dirty) throw new Error('render did not settle (possible state loop)');
+    return tree;
+  } finally {
+    rendering = false;
+  }
+}
+
+/* ------------------------------------------------------------- tree utilities */
+
+function walk(node, visit) {
+  if (!node) return;
+  if (Array.isArray(node)) {
+    node.forEach((child) => walk(child, visit));
+    return;
+  }
+  visit(node);
+  if (node.children) node.children.forEach((child) => walk(child, visit));
+}
+
+function collect(tree, predicate) {
+  const out = [];
+  walk(tree, (node) => {
+    if (predicate(node)) out.push(node);
+  });
+  return out;
+}
+
+function hasClass(node, name) {
+  return (
+    node.kind === 'host' &&
+    typeof node.props.className === 'string' &&
+    node.props.className.split(/\s+/).indexOf(name) >= 0
+  );
+}
+
+const byClass = (tree, name) => collect(tree, (node) => hasClass(node, name));
+
+function textOf(node) {
+  let text = '';
+  walk(node, (child) => {
+    if (child.kind === 'text') text += child.text;
+  });
+  return text;
+}
+
+function findByText(tree, text) {
+  return collect(tree, (node) => node.kind === 'host' && textOf(node).trim() === text);
+}
+
+function click(node, extra) {
+  if (!node.props.onClick) throw new Error('no onClick on <' + node.type + '>');
+  node.props.onClick(
+    Object.assign(
+      {
+        preventDefault() {},
+        stopPropagation() {},
+        currentTarget: node.dom,
+        target: node.dom,
+      },
+      extra || {},
+    ),
+  );
+}
+
+/* ------------------------------------------------------------------- mounting */
+
+let documentListeners = new Map();
+
+function makeDocument() {
+  documentListeners = new Map();
+  return {
+    visibilityState: 'visible',
+    addEventListener(name, handler) {
+      if (!documentListeners.has(name)) documentListeners.set(name, []);
+      documentListeners.get(name).push(handler);
+    },
+    removeEventListener(name, handler) {
+      const list = documentListeners.get(name) || [];
+      const index = list.indexOf(handler);
+      if (index >= 0) list.splice(index, 1);
+    },
+  };
+}
+
+function emitDocument(name, event) {
+  (documentListeners.get(name) || []).slice().forEach((handler) => handler(event));
+}
+
+function mount(storageSeed) {
+  instances = new Map();
+  domCache = new Map();
+  currentInst = null;
+  renderRoot = null;
+  dirty = false;
+  rendering = false;
+
+  const storage = new Map(Object.entries(storageSeed || {}));
+  const localStorage = {
+    getItem(key) {
+      return storage.has(key) ? storage.get(key) : null;
+    },
+    setItem(key, value) {
+      storage.set(key, String(value));
+    },
+    removeItem(key) {
+      storage.delete(key);
+    },
+  };
+
+  let captured = null;
+  const windowListeners = new Map();
+  const window = {
+    __ModuleLoader__: {
+      load(definition) {
+        captured = definition;
+      },
+    },
+    localStorage,
+    innerWidth: 1280,
+    innerHeight: 900,
+    matchMedia() {
+      return { matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} };
+    },
+    addEventListener(name, handler) {
+      windowListeners.set(name, (windowListeners.get(name) || []).concat([handler]));
+    },
+    removeEventListener() {},
+  };
+  const sandbox = {
+    window,
+    document: makeDocument(),
+    console,
+    setTimeout,
+    clearTimeout,
+    fetch: async () => ({ ok: true, json: async () => ({}), text: async () => '{}' }),
+    Blob,
+    AbortController,
+    URL,
+    navigator: {},
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(SOURCE, sandbox, { filename: FILE });
+  if (!captured) throw new Error('module loader was never called');
+
+  const plugin = captured.factory((id) => {
+    if (id === 'react') return React;
+    throw new Error('unexpected module request: ' + id);
+  });
+  if (typeof plugin.apply !== 'function') throw new Error('plugin has no apply()');
+
+  const registered = new Map();
+  const ctx = {
+    locale: {
+      register: () => () => {},
+      bind: () => (key) => key,
+    },
+    slots: {
+      inject: (name, factory) => factory(),
+      register: (meta, component) => {
+        registered.set((meta.name || '') + '|' + (meta.key || meta.id || ''), component);
+        return () => {};
+      },
+    },
+    get: () => null,
+    effect: (fn) => {
+      const result = fn();
+      return typeof result === 'function' ? result : () => {};
+    },
+  };
+  plugin.apply(ctx);
+
+  return { registered, storage };
+}
+
+function renderPanel(session) {
+  const ChatReplica = session.registered.get('main|deepseek-chat-ui');
+  if (!ChatReplica) throw new Error('main panel was not registered');
+  renderRoot = {
+    element: React.createElement(ChatReplica, {
+      getTheme: () => null,
+      getLocale: () => null,
+      getWorkspace: () => null,
+    }),
+  };
+  return rerender();
+}
+
+/** Run every mounted effect cleanup, like switching away from the panel. */
+function unmount() {
+  for (const inst of instances.values()) {
+    for (const effect of inst.effects) {
+      if (effect && typeof effect.cleanup === 'function') {
+        try {
+          effect.cleanup();
+        } catch (error) {
+          /* an unmount cleanup failure must not mask the assertion */
+        }
+      }
+    }
+  }
+  renderRoot = null;
+}
+
+function snapshot(session) {
+  const storage = {};
+  session.storage.forEach((value, key) => {
+    storage[key] = value;
+  });
+  return storage;
+}
+
+/* --------------------------------------------------------------------- tests */
+
+let checks = 0;
+function assert(condition, message) {
+  checks += 1;
+  if (!condition) throw new Error('ASSERT FAILED: ' + message);
+}
+
+function itemTitles(tree) {
+  return byClass(tree, 'cd-item').map((item) => textOf(byClass(item, 'cd-item-title')[0]).trim());
+}
+
+function groupHeaders(tree) {
+  return byClass(tree, 'cd-section-header').map((node) => textOf(node).trim());
+}
+
+function menuItems(tree) {
+  return byClass(tree, 'cd-session-menu-item');
+}
+
+function storedThreads(storage) {
+  const raw = storage.get('deepseek-chat-ui.threads.v1');
+  return raw ? JSON.parse(raw) : null;
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function main() {
+  /* --- 1. every row carries a three-dot menu ------------------------------ */
+  {
+    const session = mount();
+    const tree = renderPanel(session);
+    const items = byClass(tree, 'cd-item');
+    assert(items.length === 5, 'five seed conversations render, got ' + items.length);
+    items.forEach((item, index) => {
+      const trigger = byClass(item, 'cd-item-menu');
+      assert(trigger.length === 1, 'row ' + index + ' has exactly one menu button');
+    });
+    assert(byClass(tree, 'cd-session-menu').length === 0, 'menu starts closed');
+    console.log('PASS 1: every conversation row has a ... menu');
+  }
+
+  /* --- 2. the menu lists rename / pin / multi-select / delete -------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-session-menu').length === 1, 'menu opens');
+    const labels = menuItems(tree).map((node) => textOf(node).trim());
+    assert(
+      JSON.stringify(labels) === JSON.stringify(['重命名', '置顶', '多选', '删除']),
+      'menu labels are 重命名/置顶/多选/删除, got ' + JSON.stringify(labels),
+    );
+    assert(byClass(tree, 'cd-session-menu-danger').length === 1, 'delete row is the danger row');
+    assert(byClass(tree, 'cd-session-menu-sep').length === 1, 'delete sits after a separator');
+
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-session-menu').length === 0, 'pressing the same trigger again closes the menu');
+
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    emitDocument('keydown', { key: 'Escape' });
+    tree = rerender();
+    assert(byClass(tree, 'cd-session-menu').length === 0, 'Escape closes the menu');
+    console.log('PASS 2: menu items and dismissal');
+  }
+
+  /* --- 3. rename writes the title back ------------------------------------ */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    const before = itemTitles(tree)[0];
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-dialog').length === 1, 'rename dialog opens');
+    assert(findByText(tree, '重命名对话').length > 0, 'rename dialog title');
+    let input = byClass(tree, 'cd-dialog-input')[0];
+    assert(input, 'rename dialog has an input');
+    assert(input.props.value === before, 'input seeded with the current title');
+    input.props.onChange({ target: { value: '新的对话标题' } });
+    tree = rerender();
+    input = byClass(tree, 'cd-dialog-input')[0];
+    assert(input.props.value === '新的对话标题', 'input keeps the draft');
+    click(byClass(tree, 'cd-btn-primary')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-dialog').length === 0, 'dialog closes after saving');
+    assert(itemTitles(tree)[0] === '新的对话标题', 'row title updates: ' + itemTitles(tree)[0]);
+    await wait(520);
+    const saved = storedThreads(session.storage);
+    assert(saved && saved.some((thread) => thread.title === '新的对话标题'), 'renamed title persisted');
+    console.log('PASS 3: rename updates and persists the title');
+  }
+
+  /* --- 4. pin moves the conversation into a top group --------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    const titles = itemTitles(tree);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[1]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-session-menu').length === 0, 'menu closes after pinning');
+    assert(groupHeaders(tree)[0] === '置顶', 'pinned group leads the list');
+    const pinnedSection = byClass(tree, 'cd-section')[0];
+    assert(
+      textOf(byClass(pinnedSection, 'cd-item-title')[0]).trim() === titles[0],
+      'pinned conversation moved into the top group',
+    );
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    const labels = menuItems(tree).map((node) => textOf(node).trim());
+    assert(labels[1] === '取消置顶', 'menu offers unpin for a pinned row, got ' + labels[1]);
+    click(menuItems(tree)[1]);
+    tree = rerender();
+    assert(groupHeaders(tree)[0] !== '置顶', 'unpin drops the pinned group');
+    await wait(520);
+    const saved = storedThreads(session.storage);
+    assert(saved && saved.every((thread) => thread.pinnedAt === undefined), 'unpin persisted');
+    console.log('PASS 4: pin / unpin reorders into a top group');
+  }
+
+  /* --- 5. multi-select pin and delete ------------------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[2]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-multibar').length === 1, 'multi-select toolbar opens');
+    assert(
+      textOf(byClass(tree, 'cd-multibar-count')[0]).trim() === '已选 1 个',
+      'opening multi-select preselects the row: ' + textOf(byClass(tree, 'cd-multibar-count')[0]),
+    );
+    assert(byClass(tree, 'cd-item-menu').length === 0, 'row menus hide while selecting');
+    assert(byClass(tree, 'cd-check').length === 5, 'every row shows a checkbox');
+
+    click(byClass(tree, 'cd-item')[1]);
+    tree = rerender();
+    assert(
+      textOf(byClass(tree, 'cd-multibar-count')[0]).trim() === '已选 2 个',
+      'second row toggles into the selection',
+    );
+    assert(byClass(tree, 'cd-check-on').length === 2, 'two checkboxes are checked');
+
+    click(byClass(tree, 'cd-multibar-btn')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-multibar').length === 0, 'bulk pin leaves multi-select');
+    assert(groupHeaders(tree)[0] === '置顶', 'bulk pin creates the pinned group');
+    assert(byClass(byClass(tree, 'cd-section')[0], 'cd-item').length === 2, 'two rows pinned');
+
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[2]);
+    tree = rerender();
+    click(byClass(tree, 'cd-item')[1]);
+    tree = rerender();
+    click(byClass(tree, 'cd-multibar-btn')[1]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-delete-confirm').length === 1, 'bulk delete asks for confirmation');
+    assert(
+      textOf(byClass(tree, 'cd-delete-title')[0]).trim() === '删除后，选中的 2 个对话将不可恢复',
+      'bulk delete title: ' + textOf(byClass(tree, 'cd-delete-title')[0]),
+    );
+    assert(
+      textOf(byClass(tree, 'cd-confirm-pill-danger')[0]).trim() === '删除选中的 2 个对话',
+      'bulk delete action text',
+    );
+    click(byClass(tree, 'cd-confirm-pill-cancel')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-delete-confirm').length === 0, 'cancel dismisses the confirmation');
+    assert(byClass(tree, 'cd-item').length === 5, 'nothing deleted after cancel');
+
+    click(byClass(tree, 'cd-multibar-btn')[1]);
+    tree = rerender();
+    click(byClass(tree, 'cd-confirm-pill-danger')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 3, 'bulk delete removed both conversations');
+    assert(byClass(tree, 'cd-multibar').length === 0, 'multi-select ends after deleting');
+    await wait(520);
+    const saved = storedThreads(session.storage);
+    assert(saved && saved.length === 3, 'bulk delete persisted');
+    console.log('PASS 5: multi-select pin and delete');
+  }
+
+  /* --- 6. single delete confirmation copy and focus ----------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[3]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-delete-confirm').length === 1, 'delete confirmation opens');
+    assert(
+      textOf(byClass(tree, 'cd-delete-title')[0]).trim() === '删除后，该对话将不可恢复',
+      'exact confirmation title, got ' + textOf(byClass(tree, 'cd-delete-title')[0]),
+    );
+    const danger = byClass(tree, 'cd-confirm-pill-danger')[0];
+    const cancel = byClass(tree, 'cd-confirm-pill-cancel')[0];
+    assert(textOf(danger).trim() === '删除该对话', 'danger pill label');
+    assert(textOf(cancel).trim() === '取消', 'cancel pill label');
+    assert(cancel.dom.focused === true, 'cancel holds the initial focus');
+    click(danger);
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 4, 'confirmed delete removes the conversation');
+    assert(byClass(tree, 'cd-delete-confirm').length === 0, 'confirmation closes');
+    console.log('PASS 6: delete confirmation copy, focus and removal');
+  }
+
+  /* --- 7. pinned state survives a reload ---------------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item-menu')[1]);
+    tree = rerender();
+    click(menuItems(tree)[1]);
+    tree = rerender();
+    await wait(520);
+    const storage = {};
+    session.storage.forEach((value, key) => {
+      storage[key] = value;
+    });
+    const reloaded = mount(storage);
+    const tree2 = renderPanel(reloaded);
+    assert(groupHeaders(tree2)[0] === '置顶', 'pinned group restored after reload');
+    console.log('PASS 7: pinned state persists across reload');
+  }
+
+  /* --- 8. delete survives leaving the panel immediately -------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    await wait(520); // let the first render persist, so the seed is the baseline
+    const victim = itemTitles(tree)[0];
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[3]);
+    tree = rerender();
+    click(byClass(tree, 'cd-confirm-pill-danger')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 4, 'conversation deleted in the open panel');
+    unmount(); // switch away before the 400ms debounce could fire
+    const reopened = mount(snapshot(session));
+    const tree2 = renderPanel(reopened);
+    assert(byClass(tree2, 'cd-item').length === 4, 'deleted conversation stays gone after re-entering');
+    assert(itemTitles(tree2).indexOf(victim) < 0, 'deleted title no longer listed: ' + victim);
+    console.log('PASS 8: delete survives leaving and re-entering the panel');
+  }
+
+  /* --- 9. an emptied list must not resurrect the demo seeds ---------------- */
+  {
+    const session = mount({ 'deepseek-chat-ui.threads.v1': '[]' });
+    const tree = renderPanel(session);
+    assert(byClass(tree, 'cd-item').length === 0, 'saved empty list stays empty');
+    assert(byClass(tree, 'cd-list-empty').length === 1, 'empty state is rendered');
+    console.log('PASS 9: empty list does not fall back to demo conversations');
+  }
+
+  /* --- 10. rename survives leaving the panel immediately ------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    await wait(520);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[0]);
+    tree = rerender();
+    byClass(tree, 'cd-dialog-input')[0].props.onChange({ target: { value: '离开前改的名字' } });
+    tree = rerender();
+    click(byClass(tree, 'cd-btn-primary')[0]);
+    tree = rerender();
+    unmount();
+    const reopened = mount(snapshot(session));
+    const tree2 = renderPanel(reopened);
+    assert(itemTitles(tree2)[0] === '离开前改的名字', 'renamed title survives a panel switch');
+    console.log('PASS 10: rename survives leaving and re-entering the panel');
+  }
+
+  console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
+}
+
+main().catch((error) => {
+  console.error('\nFAILED after ' + checks + ' assertions');
+  console.error(error && error.stack ? error.stack : error);
+  process.exitCode = 1;
+});

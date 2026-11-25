@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "DeepSeek 对话界面复刻",
-    "description": "按 chat-demo 前端复刻的对话页：会话侧栏、欢迎语、输入框与消息气泡，并跟随 DSH 的浅色/深色主题。"
+    "description": "把 DeepSeek 网页版 chat-demo 的对话界面搬进 DSH：会话侧栏、消息气泡、输入框、上传与语音、朗读，颜色跟随 DSH 主题。安装后在侧栏点面板图标「对话模式」打开。",
+    "detail": "docs/DETAIL.zh.md"
   }
 }

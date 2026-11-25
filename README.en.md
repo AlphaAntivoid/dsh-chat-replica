@@ -13,15 +13,15 @@ A DeepSeek chat-demo style conversation UI for [DeepSeek Harness](https://github
 
 The "⋯" menu on every conversation (dark theme):
 
-![Conversation list menu](docs/screenshots/session-menu-dark.png)
+![Conversation list menu](media/screenshots/session-menu-dark.png)
 
 Delete confirmation (dark theme):
 
-![Delete confirmation](docs/screenshots/delete-confirm-dark.png)
+![Delete confirmation](media/screenshots/delete-confirm-dark.png)
 
 Light theme:
 
-![Light theme](docs/screenshots/light.png)
+![Light theme](media/screenshots/light.png)
 
 ## Features
 
@@ -68,7 +68,7 @@ demo conversations.
 
 ## Install
 
-The fastest way: download `dsh-chat-replica-1.0.0.tar.gz` from
+The fastest way: download the latest `dsh-chat-replica-<version>.tar.gz` from
 [Releases](https://github.com/AlphaAntivoid/dsh-chat-replica/releases/latest), then in DSH open
 **Plugins → Install → pick the tarball**, refresh the page, and click the **Chat mode** panel icon in the
 sidebar. The page fills the main panel.
@@ -109,6 +109,10 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 - A profile with client-hmr enabled hot-reloads the plugin when `client.js` changes; restart DSH if it does not.
 - Theme colors must come from `--dsw-alias-*` / `--dsw-specific-*` tokens. Do not hard-code colors, except for
   the deliberate light-grey / black "Cancel" pill in the delete confirmation.
+- Local checks: `npm test` (headless render regressions, stylesheet integrity, package metadata);
+  `npm run bundle` writes `dist/dsh-chat-replica-<version>.tar.gz`.
+- Releasing: update `CHANGELOG.md` and `version` in `package.json`, then push a `v<version>` tag; GitHub Actions
+  runs the tests, builds the bundle and creates the Release.
 
 ## Layout
 

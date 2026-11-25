@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="300" viewBox="0 0 640 300" role="img" aria-label="The conversation list menu opened from one conversation: rename, pin, select and delete">
+  <rect width="640" height="300" rx="20" fill="#101318"/>
+  <rect x="0.75" y="0.75" width="638.5" height="298.5" rx="19.25" fill="none" stroke="#242a33" stroke-width="1.5"/>
+
+  <g opacity="0.5">
+    <rect x="48" y="36" width="544" height="44" rx="12" fill="#171b21"/>
+    <rect x="68" y="51" width="150" height="14" rx="7" fill="#7b8492"/>
+    <circle cx="548" cy="58" r="2.4" fill="#7b8492"/>
+    <circle cx="558" cy="58" r="2.4" fill="#7b8492"/>
+    <circle cx="568" cy="58" r="2.4" fill="#7b8492"/>
+
+    <rect x="48" y="92" width="544" height="44" rx="12" fill="#171b21"/>
+    <rect x="68" y="107" width="196" height="14" rx="7" fill="#7b8492"/>
+    <circle cx="548" cy="114" r="2.4" fill="#7b8492"/>
+    <circle cx="558" cy="114" r="2.4" fill="#7b8492"/>
+    <circle cx="568" cy="114" r="2.4" fill="#7b8492"/>
+
+    <rect x="48" y="232" width="544" height="44" rx="12" fill="#171b21"/>
+    <rect x="68" y="247" width="120" height="14" rx="7" fill="#7b8492"/>
+    <circle cx="548" cy="254" r="2.4" fill="#7b8492"/>
+    <circle cx="558" cy="254" r="2.4" fill="#7b8492"/>
+    <circle cx="568" cy="254" r="2.4" fill="#7b8492"/>
+  </g>
+
+  <rect x="222" y="64" width="292" height="230" rx="18" fill="#05070a" opacity="0.55"/>
+  <rect x="216" y="54" width="292" height="230" rx="18" fill="#1c222b" stroke="#333b47" stroke-width="1.5"/>
+
+  <rect x="226" y="64" width="272" height="46" rx="12" fill="#2a3340"/>
+
+  <g transform="translate(244 77)" fill="none" stroke="#d3dae4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 17l10-10 4 4-10 10H3z"/>
+    <path d="M12 6l4 4"/>
+  </g>
+  <rect x="278" y="81" width="122" height="12" rx="6" fill="#d3dae4" opacity="0.92"/>
+
+  <g transform="translate(244 125)" fill="none" stroke="#d3dae4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 2h10l-1 8 4 4H2l4-4z"/>
+    <path d="M10 14v6"/>
+  </g>
+  <rect x="278" y="129" width="88" height="12" rx="6" fill="#d3dae4" opacity="0.78"/>
+
+  <g transform="translate(244 173)" fill="none" stroke="#d3dae4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.5" y="2.5" width="15" height="15" rx="4.5"/>
+    <path d="M6.5 10l2.8 2.8 5.2-6"/>
+  </g>
+  <rect x="278" y="177" width="104" height="12" rx="6" fill="#d3dae4" opacity="0.78"/>
+
+  <line x1="232" y1="214" x2="492" y2="214" stroke="#2e3641" stroke-width="1.5"/>
+
+  <g transform="translate(244 233)" fill="none" stroke="#e5534b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 5h16"/>
+    <path d="M7.5 5V2.5h5V5"/>
+    <path d="M4 5l1 13h10l1-13"/>
+    <path d="M8 8.5v6M12 8.5v6"/>
+  </g>
+  <rect x="278" y="237" width="72" height="12" rx="6" fill="#e5534b" opacity="0.95"/>
+</svg>

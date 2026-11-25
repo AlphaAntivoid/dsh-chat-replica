@@ -12,15 +12,15 @@
 
 会话列表的「⋯」菜单（深色主题）：
 
-![会话列表菜单](docs/screenshots/session-menu-dark.png)
+![会话列表菜单](media/screenshots/session-menu-dark.png)
 
 删除的二次确认（深色主题）：
 
-![删除二次确认](docs/screenshots/delete-confirm-dark.png)
+![删除二次确认](media/screenshots/delete-confirm-dark.png)
 
 浅色主题：
 
-![浅色主题](docs/screenshots/light.png)
+![浅色主题](media/screenshots/light.png)
 
 ## 功能
 
@@ -66,8 +66,8 @@
 
 ## 安装
 
-最快的方式：从 [Releases](https://github.com/AlphaAntivoid/dsh-chat-replica/releases/latest) 下载
-`dsh-chat-replica-1.0.0.tar.gz`，然后打开 DSH → **插件 → 安装 → 选择该 tar.gz**，刷新页面，
+最快的方式：从 [Releases](https://github.com/AlphaAntivoid/dsh-chat-replica/releases/latest) 下载最新的
+`dsh-chat-replica-<version>.tar.gz`，然后打开 DSH → **插件 → 安装 → 选择该 tar.gz**，刷新页面，
 侧栏会出现面板图标「对话模式」，点开即占满中间面板。
 
 也可以自己从源码打包（本仓库就是插件包本体，`package.json` 在根目录；Plugin Manager 接受
@@ -103,6 +103,10 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
 - 开着 client-hmr 的 profile 会在 `client.js` 落盘后自动热加载；没有生效就重启 DSH。
 - 主题颜色只使用 `--dsw-alias-*` / `--dsw-specific-*` 令牌，不要在 CSS 里写死颜色（`#f0f0f0` 这类
   只用于「删除确认」里刻意要求灰白底黑字的按钮）。
+- 本地检查：`npm test` 跑无头渲染回归、样式类完整性与包元数据；`npm run bundle` 产出
+  `dist/dsh-chat-replica-<version>.tar.gz`。
+- 发版：更新 `CHANGELOG.md` 与 `package.json` 的 `version`，打 tag `v<version>` 并推送；GitHub Actions
+  会自动跑测试、打包并创建 Release。
 
 ## 结构
 

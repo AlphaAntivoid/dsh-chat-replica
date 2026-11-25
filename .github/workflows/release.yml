@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tests
+        run: npm test
+      - name: Build bundle
+        run: npm run bundle
+      - name: Compose release notes
+        run: |
+          node scripts/release-notes.mjs "$GITHUB_REF_NAME" --out release-notes.md
+          SHA=$(sha256sum dist/*.tar.gz | awk '{print $1}')
+          printf '\n---\n\n## 校验 / Checksum\n\n`SHA256: %s`\n' "$SHA" >> release-notes.md
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file release-notes.md
