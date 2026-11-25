@@ -1,5 +1,7 @@
 # dsh-chat-replica
 
+[English](README.en.md) | **简体中文**
+
 把 DeepSeek 网页版 chat-demo 的对话界面搬进 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的插件：会话侧栏、消息气泡、输入框、上传与语音、朗读，颜色全部引用 DSH 主题令牌，自动跟随浅色 / 深色。
 
 > **非官方项目。** 与 DeepSeek、DeepSeek Harness 官方没有任何关联，也不代表其立场。
