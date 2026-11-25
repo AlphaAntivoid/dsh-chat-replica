@@ -87,6 +87,10 @@ async function handle(req, res, ctx) {
     sendJson(res, 200, { scheme: await readSystemScheme() });
     return;
   }
+  if (url.pathname === `${ROUTE_PREFIX}/update`) {
+    sendJson(res, 200, await checkLatestRelease());
+    return;
+  }
   if (url.pathname === `${ROUTE_PREFIX}/models`) {
     sendJson(res, 200, await listModelCatalog(ctx));
     return;
@@ -253,6 +257,43 @@ function readSelection(ctx) {
     return selection;
   } catch {
     return undefined;
+  }
+}
+
+const RELEASES_URL = 'https://api.github.com/repos/AlphaAntivoid/dsh-chat-replica/releases/latest';
+
+/**
+ * Ask GitHub for the newest published release. Only the tag and page URL are
+ * returned; any failure degrades to `{ ok: false }` so the page can report a
+ * failed check instead of an exception.
+ *
+ * @param fetcher - `fetch`-compatible implementation (injectable for tests).
+ * @returns `{ ok, version, tag, url, publishedAt }` or `{ ok: false }`.
+ */
+export async function checkLatestRelease(fetcher = globalThis.fetch) {
+  if (typeof fetcher !== 'function') return { ok: false };
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 6000);
+  try {
+    const response = await fetcher(RELEASES_URL, {
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'dsh-chat-replica' },
+      signal: abort.signal,
+    });
+    if (!response.ok) return { ok: false };
+    const body = await response.json();
+    const tag = typeof body.tag_name === 'string' ? body.tag_name.trim() : '';
+    if (tag === '') return { ok: false };
+    return {
+      ok: true,
+      tag,
+      version: tag.replace(/^v/i, ''),
+      url: typeof body.html_url === 'string' ? body.html_url : '',
+      publishedAt: typeof body.published_at === 'string' ? body.published_at : '',
+    };
+  } catch (error) {
+    return { ok: false };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

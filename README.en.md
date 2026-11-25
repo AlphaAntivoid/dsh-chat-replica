@@ -35,6 +35,10 @@ Model picker: the composer shows the current model; open it to switch between pr
 
 ![Model picker](media/screenshots/model-dark.png)
 
+Settings: theme, text size and language, with the version, repository link and "check for updates" in the footer.
+
+![Settings](media/screenshots/settings-dark.png)
+
 Light theme:
 
 ![Light theme](media/screenshots/light.png)
@@ -51,6 +55,7 @@ Light theme:
 - A single conversation can be exported as a **Markdown** reading copy; JSON remains the backup and re-import format
 - Find in a conversation: Ctrl/Cmd+F highlights matches, marks the current one solid, Enter / Shift+Enter jump, Esc closes
 - Model picker: the composer shows the current model; switch per provider or fall back to the default. The choice is stored locally and sent with each request; an unknown model falls back to the default
+- The settings footer can check for updates: it queries the latest GitHub release only when clicked and shows up-to-date / a new version (click again to open it) / a failed check
 - Message bubbles, welcome screen, composer, Markdown (headings / lists / inline code / code blocks) and a collapsible "Thought" block
 - Upload text files, voice input, send / stop on the right of the composer
 - "Deep thinking" maps to the model's reasoningEffort (on = max, off = off; levels come from the model declaration)
@@ -153,7 +158,7 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 
 | File | Purpose |
 | --- | --- |
-| `index.js` | Host half: `/chat-replica/chat` (NDJSON model stream), `/chat-replica/models` (provider / model catalog), `/chat-replica/transcribe` (16 kHz WAV to text), `/chat-replica/tts` (read-aloud PCM proxy), `/chat-replica/system-theme`, `/chat-replica/paths` (export folder shortcuts), `/chat-replica/export` (writes JSON or Markdown) |
+| `index.js` | Host half: `/chat-replica/chat` (NDJSON model stream), `/chat-replica/models` (provider / model catalog), `/chat-replica/update` (latest release lookup), `/chat-replica/transcribe` (16 kHz WAV to text), `/chat-replica/tts` (read-aloud PCM proxy), `/chat-replica/system-theme`, `/chat-replica/paths` (export folder shortcuts), `/chat-replica/export` (writes JSON or Markdown) |
 | `client.js` | Browser half: the `main` page plus the `sidebar.panellist` icon, with CSS, the Chinese and English dictionaries, Markdown, recording and upload |
 | `cordis.patch.yml` | Bundle patch, read by the Plugin Manager at install time |
 | `locale/zh.json`, `locale/en.json` | Name and description shown in the Plugin Manager |

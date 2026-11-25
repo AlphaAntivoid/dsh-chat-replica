@@ -34,6 +34,10 @@
 
 ![模型选择](media/screenshots/model-dark.png)
 
+设置页：主题、字号、语言，页脚显示版本、仓库链接与「检查更新」。
+
+![设置](media/screenshots/settings-dark.png)
+
 浅色主题：
 
 ![浅色主题](media/screenshots/light.png)
@@ -50,6 +54,7 @@
 - 单条会话可导出为 **Markdown** 阅读稿；JSON 仍用于备份与再导入
 - 会话内查找：`Ctrl/Cmd+F`，命中词高亮、当前命中实色，回车 / Shift+回车上下跳转，Esc 关闭
 - 模型选择：输入框下方显示当前模型，按 provider 分组切换，可切回「跟随默认」；选择存本地并随请求发送，Host 校验失败会回退默认
+- 设置页脚可「检查更新」：点一下才联网查询 GitHub 最新 Release，显示已是最新 / 新版本（再点打开 Release 页）/ 检查失败
 - 消息气泡、欢迎语、输入框，Markdown（标题 / 列表 / 行内代码 / 代码块）与「已思考」折叠块
 - 输入框右侧：📎 上传文本文件、🎤 语音输入、发送 / 停止
 - 「深度思考」映射到模型的 reasoningEffort（开 = max，关 = off，档位取自模型声明）
@@ -145,7 +150,7 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
 
 | 文件 | 作用 |
 | --- | --- |
-| `index.js` | Host 半边：`/chat-replica/chat`（NDJSON 模型流）、`/chat-replica/models`（可用 provider / model 目录）、`/chat-replica/transcribe`（16k WAV 转文字）、`/chat-replica/tts`（朗读 PCM 代理）、`/chat-replica/system-theme`、`/chat-replica/paths`（导出快捷目录）、`/chat-replica/export`（写 JSON / Markdown 到指定目录） |
+| `index.js` | Host 半边：`/chat-replica/chat`（NDJSON 模型流）、`/chat-replica/models`（可用 provider / model 目录）、`/chat-replica/update`（查询最新 Release）、`/chat-replica/transcribe`（16k WAV 转文字）、`/chat-replica/tts`（朗读 PCM 代理）、`/chat-replica/system-theme`、`/chat-replica/paths`（导出快捷目录）、`/chat-replica/export`（写 JSON / Markdown 到指定目录） |
 | `client.js` | 浏览器半边：`main` 页面 + `sidebar.panellist` 图标，内含 CSS、中英文字典、Markdown、录音与上传 |
 | `cordis.patch.yml` | bundle 补丁（安装时由 Plugin Manager 读取） |
 | `locale/zh.json`、`locale/en.json` | Plugin Manager 里显示的名称与描述 |

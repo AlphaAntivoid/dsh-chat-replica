@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.14.0
+
+### 中文
+
+- 设置页脚新增「检查更新」：只在你点击时联网查询 GitHub 最新 Release，显示已是最新 / 新版本 vX（再点打开 Release 页）/ 检查失败
+- 新增 `GET /chat-replica/update`：6 秒超时，任何失败都降级为 `{ ok: false }`，不抛异常；只回传 tag、版本号与 Release 页地址
+- 把可访问性静态审计纳入渲染测试：按钮必须有可读名称，表单控件必须有标签，对话框必须有 `aria-modal` 与名称；隐藏的文件输入补上 `aria-hidden` 与 `tabIndex=-1`
+- 测试从 146 条断言增加到 154 条（更新检查 + 六个界面的可访问性审计）
+
+### English
+
+- The settings footer can check for updates: it queries the latest GitHub release only when clicked and reports up-to-date / a new version (click again to open the release) / a failed check
+- Added `GET /chat-replica/update` with a 6-second timeout; any failure degrades to `{ ok: false }` instead of throwing, and only the tag, version and release URL are returned
+- Static accessibility auditing is now part of the render tests: buttons need accessible names, inputs need labels, dialogs need `aria-modal` and a name; hidden file inputs are marked `aria-hidden` with `tabIndex=-1`
+- Tests grew from 146 to 154 assertions (update check plus accessibility audits of six surfaces)
+
 ## 1.13.0
 
 ### 中文

@@ -1130,7 +1130,10 @@ async function main() {
     const foot = byClass(tree, 'cd-settings-foot')[0];
     assert(foot, 'the settings footer is rendered');
     const footText = textOf(foot).replace(/\s+/g, '');
-    assert(/^v\d+\.\d+\.\d+·GitHub$/.test(footText), 'the footer reads vX.Y.Z · GitHub: ' + footText);
+    assert(
+      /^v\d+\.\d+\.\d+·GitHub·检查更新$/.test(footText),
+      'the footer reads vX.Y.Z · GitHub · 检查更新: ' + footText,
+    );
     const link = byClass(foot, 'cd-settings-repo')[0];
     assert(link && link.type === 'a', 'the GitHub label is a link');
     assert(link.props.href === 'https://github.com/AlphaAntivoid/dsh-chat-replica', 'the link targets the repository');
@@ -1251,6 +1254,99 @@ async function main() {
     const stored = session.storage.get('deepseek-chat-ui.model.v1');
     assert(stored !== undefined && JSON.parse(stored).model === 'qwen3', 'the choice is persisted');
     console.log('PASS 31: the model picker lists providers and persists a choice');
+  }
+
+  /* --- 32. the settings page checks for updates ---------------------------- */
+  {
+    const session = mount(undefined, {
+      fetch: async (url) => {
+        if (String(url).indexOf('/update') >= 0) {
+          return {
+            ok: true,
+            json: async () => ({ ok: true, version: '9.9.9', url: 'https://example.test/release' }),
+            text: async () => '{}',
+          };
+        }
+        return { ok: true, json: async () => ({}), text: async () => '{}' };
+      },
+    });
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-settings')[0]);
+    tree = rerender();
+    const check = byClass(tree, 'cd-settings-update')[0];
+    assert(check, 'the settings footer offers a check for updates action');
+    click(check);
+    await wait(10);
+    tree = rerender();
+    assert(
+      findByText(tree, '新版本 v9.9.9').length >= 1,
+      'a newer release is reported: ' + textOf(byClass(tree, 'cd-settings-update')[0]),
+    );
+    console.log('PASS 32: the settings page checks for updates');
+  }
+
+  /* --- 33. accessibility audit across the main surfaces -------------------- */
+  {
+    const nameOf = (node) => {
+      const props = node.props || {};
+      const aria = typeof props['aria-label'] === 'string' ? props['aria-label'].trim() : '';
+      if (aria !== '') return aria;
+      const title = typeof props.title === 'string' ? props.title.trim() : '';
+      if (title !== '') return title;
+      return textOf(node).trim();
+    };
+    const problemsOf = (tree) => {
+      const problems = [];
+      collect(tree, (node) => node.kind === 'host').forEach((node) => {
+        const props = node.props || {};
+        if (props['aria-hidden'] === 'true') return;
+        if (node.type === 'button' && nameOf(node) === '') problems.push('unlabeled button');
+        if (node.type === 'input' || node.type === 'textarea') {
+          const label = typeof props['aria-label'] === 'string' ? props['aria-label'].trim() : '';
+          const placeholder = typeof props.placeholder === 'string' ? props.placeholder.trim() : '';
+          if (label === '' && placeholder === '') problems.push('unlabeled ' + node.type + '.' + (props.className || ''));
+        }
+        if (props.role === 'dialog' || props.role === 'alertdialog') {
+          if (props['aria-modal'] !== 'true') problems.push('dialog without aria-modal');
+          if (nameOf(node) === '') problems.push('unnamed dialog');
+        }
+      });
+      return problems;
+    };
+    const check = (label, prepare) => {
+      const session = mount();
+      let tree = renderPanel(session);
+      tree = prepare(tree);
+      const problems = problemsOf(tree);
+      assert(problems.length === 0, label + ': ' + problems.join(', '));
+    };
+    check('panel', (tree) => tree);
+    check('session menu', (tree) => {
+      click(byClass(tree, 'cd-item-menu')[0]);
+      return rerender();
+    });
+    check('settings', (tree) => {
+      click(byClass(tree, 'cd-settings')[0]);
+      return rerender();
+    });
+    check('delete dialog', (tree) => {
+      click(byClass(tree, 'cd-item-menu')[0]);
+      tree = rerender();
+      click(byClass(tree, 'cd-session-menu-item')[5]);
+      return rerender();
+    });
+    check('find bar', (tree) => {
+      click(byClass(tree, 'cd-item')[0]);
+      tree = rerender();
+      const button = collect(tree, (node) => node.kind === 'host' && node.props['aria-label'] === '查找')[0];
+      click(button);
+      return rerender();
+    });
+    check('model menu', (tree) => {
+      click(byClass(tree, 'cd-model-chip')[0]);
+      return rerender();
+    });
+    console.log('PASS 33: every surface exposes accessible names');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

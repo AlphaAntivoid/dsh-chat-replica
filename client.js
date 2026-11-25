@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.13.0';
+    const PLUGIN_VERSION = '1.14.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -203,6 +203,16 @@ window.__ModuleLoader__.load({
       'model.pick': '选择模型',
       'model.default': '默认模型',
       'model.followDefault': '跟随默认',
+      'update.current': '当前版本 v{version}',
+      'update.checking': '正在检查最新版本…',
+      'update.latest': '已是最新版本 v{version}',
+      'update.available': '发现新版本 v{version}',
+      'update.failed': '检查失败，请稍后再试',
+      'update.check': '检查更新',
+      'update.checkingShort': '检查中…',
+      'update.latestShort': '已是最新',
+      'update.availableShort': '新版本 v{version}',
+      'update.failedShort': '检查失败',
       'rename.title': '重命名对话',
       'rename.field': '对话标题',
       'rename.save': '保存',
@@ -360,6 +370,16 @@ window.__ModuleLoader__.load({
       'model.pick': 'Choose model',
       'model.default': 'Default model',
       'model.followDefault': 'Use default',
+      'update.current': 'Current version v{version}',
+      'update.checking': 'Checking the latest release…',
+      'update.latest': 'Up to date: v{version}',
+      'update.available': 'New version available: v{version}',
+      'update.failed': 'Check failed, try again later',
+      'update.check': 'Check for updates',
+      'update.checkingShort': 'Checking…',
+      'update.latestShort': 'Up to date',
+      'update.availableShort': 'v{version} available',
+      'update.failedShort': 'Check failed',
       'rename.title': 'Rename conversation',
       'rename.field': 'Conversation title',
       'rename.save': 'Save',
@@ -1254,6 +1274,27 @@ window.__ModuleLoader__.load({
       return String(path || '').replace(/^\/sdcard\//, '').replace(/^\/storage\/emulated\/0\//, '');
     }
 
+    /** 比较 `1.2.3` 形式的版本号；返回 -1 / 0 / 1。 */
+    function compareVersions(left, right) {
+      const parse = function (value) {
+        return String(value || '')
+          .replace(/^v/i, '')
+          .split('.')
+          .map(function (part) {
+            return parseInt(part, 10) || 0;
+          });
+      };
+      const a = parse(left);
+      const b = parse(right);
+      const length = Math.max(a.length, b.length);
+      for (let index = 0; index < length; index += 1) {
+        const x = a[index] || 0;
+        const y = b[index] || 0;
+        if (x !== y) return x < y ? -1 : 1;
+      }
+      return 0;
+    }
+
     /**
      * 设置面板：通用设置（主题 / 语言）与数据管理（导入 / 导出 / 删除）。
      * 导出位置用内嵌的文件浏览视图选择，避免依赖系统文件选择器。
@@ -1289,6 +1330,9 @@ window.__ModuleLoader__.load({
       const [listing, setListing] = useState(null);
       const [browseError, setBrowseError] = useState('');
       const fileRef = useRef(null);
+      /** 「检查更新」的状态：null = 未检查，其余见 updateHint。 */
+      const [updateState, setUpdateState] = useState(null);
+      const [updateBusy, setUpdateBusy] = useState(false);
       /** 快捷目录由 Host 提供（桌面是 Downloads / Documents / 主目录，Android 是 /sdcard）。 */
       const [quickDirs, setQuickDirs] = useState([]);
       useEffect(
@@ -1528,6 +1572,53 @@ window.__ModuleLoader__.load({
         }
       };
 
+      const updateHint = function () {
+        if (updateState === null) return t('update.current').replace('{version}', PLUGIN_VERSION);
+        if (updateState.kind === 'checking') return t('update.checking');
+        if (updateState.kind === 'latest') return t('update.latest').replace('{version}', updateState.version);
+        if (updateState.kind === 'available') return t('update.available').replace('{version}', updateState.version);
+        return t('update.failed');
+      };
+
+      /** 页脚那一行里显示的短标签。 */
+      const updateLabel = function () {
+        if (updateState === null) return t('update.check');
+        if (updateState.kind === 'checking') return t('update.checkingShort');
+        if (updateState.kind === 'latest') return t('update.latestShort');
+        if (updateState.kind === 'available') return t('update.availableShort').replace('{version}', updateState.version);
+        return t('update.failedShort');
+      };
+
+      /** 手动检查 GitHub 最新 Release；发现新版本后按钮变成「查看」。 */
+      const checkUpdate = async function () {
+        if (updateBusy) return;
+        if (updateState !== null && updateState.kind === 'available') {
+          if (updateState.url !== '') window.open(updateState.url, '_blank', 'noreferrer');
+          return;
+        }
+        setUpdateBusy(true);
+        setUpdateState({ kind: 'checking' });
+        try {
+          const response = await fetch(`${API}/update`, { headers: { accept: 'application/json' } });
+          const body = await response.json();
+          if (!response.ok || !body || body.ok !== true || typeof body.version !== 'string') {
+            setUpdateState({ kind: 'failed' });
+          } else if (compareVersions(body.version, PLUGIN_VERSION) > 0) {
+            setUpdateState({
+              kind: 'available',
+              version: body.version,
+              url: typeof body.url === 'string' ? body.url : '',
+            });
+          } else {
+            setUpdateState({ kind: 'latest', version: body.version });
+          }
+        } catch (error) {
+          setUpdateState({ kind: 'failed' });
+        } finally {
+          setUpdateBusy(false);
+        }
+      };
+
       const renderGeneral = function () {
         return h(
           'div',
@@ -1708,6 +1799,8 @@ window.__ModuleLoader__.load({
             type: 'file',
             accept: '.json,application/json',
             className: 'cd-file-input',
+            'aria-hidden': 'true',
+            tabIndex: -1,
             onChange: function (event) {
               pickImport(event.target.files);
               event.target.value = '';
@@ -1906,6 +1999,18 @@ window.__ModuleLoader__.load({
                     rel: 'noreferrer',
                   },
                   'GitHub',
+                ),
+                h('span', { 'aria-hidden': 'true' }, '·'),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'cd-settings-update',
+                    title: updateHint(),
+                    disabled: updateBusy,
+                    onClick: checkUpdate,
+                  },
+                  updateLabel(),
                 ),
               ),
           menu !== null
@@ -2974,6 +3079,8 @@ window.__ModuleLoader__.load({
               type: 'file',
               multiple: true,
               className: 'cd-file-input',
+              'aria-hidden': 'true',
+              tabIndex: -1,
               onChange: function (event) {
                 const files = event.target.files;
                 if (files && files.length > 0) props.onPickFiles(files);
@@ -5312,6 +5419,9 @@ body[data-ds-dark-theme] .cd-send:disabled{opacity:.55}
 .cd-pane-slot{flex:0 0 50%;width:50%;min-width:0}
 .cd-pane{display:flex;flex-direction:column}
 .cd-pane-title{padding:2px 0 10px;color:var(--dsw-alias-label-primary);font-size:14px;font-weight:500;line-height:22px}
+.cd-settings-update{padding:0;border:0;background:transparent;color:inherit;font:inherit;line-height:inherit;cursor:pointer}
+.cd-settings-update:hover:not(:disabled){color:var(--dsw-alias-label-primary);text-decoration:underline}
+.cd-settings-update:disabled{cursor:default;opacity:.6}
 .cd-theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .cd-theme-card{box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;height:92px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:transparent;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px;cursor:pointer;transition:border-color .15s,background-color .15s}
 .cd-theme-card:hover{background:var(--dsw-alias-interactive-bg-hover)}

@@ -218,6 +218,27 @@ async function main() {
     'no selection falls back to the default',
   );
 
+  // The update check degrades to `{ ok: false }` on any failure.
+  const release = await host.checkLatestRelease(async () => ({
+    ok: true,
+    json: async () => ({ tag_name: 'v9.9.9', html_url: 'https://example.test/release' }),
+  }));
+  assert.equal(release.ok, true, 'a reachable release is reported');
+  assert.equal(release.version, '9.9.9', 'the v prefix is stripped');
+  assert.equal(release.url, 'https://example.test/release', 'the release page URL is passed through');
+  assert.deepEqual(
+    await host.checkLatestRelease(async () => ({ ok: false })),
+    { ok: false },
+    'an HTTP failure is reported as a failed check',
+  );
+  assert.deepEqual(
+    await host.checkLatestRelease(async () => {
+      throw new Error('offline');
+    }),
+    { ok: false },
+    'a network error is reported as a failed check',
+  );
+
   console.log('PASS: host export directory resolution, single-thread export and folder shortcuts');
 }
 
