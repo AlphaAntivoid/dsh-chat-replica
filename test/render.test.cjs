@@ -380,7 +380,9 @@ function mount(storageSeed, options) {
       return setTimeout(fn, ms);
     },
     clearTimeout,
-    fetch: async () => ({ ok: true, json: async () => ({}), text: async () => '{}' }),
+    fetch: options && typeof options.fetch === 'function'
+      ? (...args) => options.fetch(...args)
+      : async () => ({ ok: true, json: async () => ({}), text: async () => '{}' }),
     Blob,
     AbortController,
     URL,
@@ -1181,6 +1183,74 @@ async function main() {
     tree = rerender();
     assert(byClass(tree, 'cd-find').length === 0, 'Escape closes the find bar');
     console.log('PASS 29: a conversation can be searched in place');
+  }
+
+  /* --- 30. the model picker opens, lists the default and closes ------------ */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    const chip = byClass(tree, 'cd-model-chip')[0];
+    assert(chip, 'the composer offers a model chip');
+    assert(textOf(chip).trim() === '默认模型', 'the chip names the fallback: ' + textOf(chip));
+    click(chip);
+    tree = rerender();
+    assert(byClass(tree, 'cd-model-menu').length === 1, 'the model menu opens');
+    assert(
+      findByText(tree, '跟随默认').length >= 1,
+      'the menu offers following the default, menu=' + JSON.stringify(textOf(byClass(tree, 'cd-model-menu')[0])),
+    );
+    const mask = byClass(tree, 'cd-model-mask')[0];
+    click(mask);
+    tree = rerender();
+    assert(byClass(tree, 'cd-model-menu').length === 0, 'clicking the mask closes the menu');
+    console.log('PASS 30: the model picker opens and closes');
+  }
+
+  /* --- 31. the model picker lists providers and persists a choice ---------- */
+  {
+    const catalog = {
+      providers: [
+        {
+          id: 'deepseek',
+          name: 'DeepSeek',
+          models: [
+            { id: 'deepseek-chat', name: 'DeepSeek Chat' },
+            { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' },
+          ],
+        },
+        { id: 'local', name: 'Local', models: [{ id: 'qwen3', name: 'Qwen3 32B' }] },
+      ],
+      current: { provider: 'deepseek', model: 'deepseek-chat' },
+    };
+    const session = mount(undefined, {
+      fetch: async (url) => {
+        if (String(url).indexOf('/models') >= 0) {
+          return { ok: true, json: async () => catalog, text: async () => '{}' };
+        }
+        return { ok: true, json: async () => ({}), text: async () => '{}' };
+      },
+    });
+    let tree = renderPanel(session);
+    await wait(10);
+    tree = rerender();
+    assert(
+      textOf(byClass(tree, 'cd-model-chip')[0]).trim() === 'DeepSeek Chat',
+      'the chip shows the default model name: ' + textOf(byClass(tree, 'cd-model-chip')[0]),
+    );
+    click(byClass(tree, 'cd-model-chip')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-model-group').length === 2, 'providers are grouped in the menu');
+    assert(findByText(tree, 'Qwen3 32B').length >= 1, 'provider models are listed');
+    const localItem = byClass(tree, 'cd-session-menu-item').find((node) => textOf(node).trim() === 'Qwen3 32B');
+    click(localItem);
+    tree = rerender();
+    assert(
+      textOf(byClass(tree, 'cd-model-chip')[0]).trim() === 'Qwen3 32B',
+      'the chip follows the picked model: ' + textOf(byClass(tree, 'cd-model-chip')[0]),
+    );
+    const stored = session.storage.get('deepseek-chat-ui.model.v1');
+    assert(stored !== undefined && JSON.parse(stored).model === 'qwen3', 'the choice is persisted');
+    console.log('PASS 31: the model picker lists providers and persists a choice');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

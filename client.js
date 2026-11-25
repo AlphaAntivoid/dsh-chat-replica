@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.12.0';
+    const PLUGIN_VERSION = '1.13.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -25,6 +25,38 @@ window.__ModuleLoader__.load({
     const STORE_THEME_PREF = 'deepseek-chat-ui.theme-pref.v1';
     const STORE_TTS = 'deepseek-chat-ui.tts.v1';
     const STORE_FONT = 'deepseek-chat-ui.font.v1';
+    const STORE_MODEL = 'deepseek-chat-ui.model.v1';
+
+    /** 聊天用的模型选择；null 表示跟随 DSH 的默认模型。 */
+    function loadModelChoice() {
+      try {
+        const raw = window.localStorage.getItem(STORE_MODEL);
+        if (typeof raw !== 'string' || raw === '') return null;
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          typeof parsed.provider === 'string' &&
+          typeof parsed.model === 'string' &&
+          parsed.provider !== '' &&
+          parsed.model !== ''
+        ) {
+          return { provider: parsed.provider, model: parsed.model };
+        }
+      } catch (error) {
+        /* ignore a corrupt choice */
+      }
+      return null;
+    }
+
+    function saveModelChoice(choice) {
+      try {
+        if (choice === null) window.localStorage.removeItem(STORE_MODEL);
+        else window.localStorage.setItem(STORE_MODEL, JSON.stringify(choice));
+      } catch (error) {
+        /* ignore quota errors */
+      }
+    }
+
     const DEFAULT_EXPORT_DIR = '';
     const DRAWER_MS = 200;
     /** 删除后允许撤销的时间窗（毫秒）；超过就真的没了。 */
@@ -168,6 +200,9 @@ window.__ModuleLoader__.load({
       'find.prev': '上一个匹配',
       'find.next': '下一个匹配',
       'find.close': '关闭查找',
+      'model.pick': '选择模型',
+      'model.default': '默认模型',
+      'model.followDefault': '跟随默认',
       'rename.title': '重命名对话',
       'rename.field': '对话标题',
       'rename.save': '保存',
@@ -322,6 +357,9 @@ window.__ModuleLoader__.load({
       'find.prev': 'Previous match',
       'find.next': 'Next match',
       'find.close': 'Close find',
+      'model.pick': 'Choose model',
+      'model.default': 'Default model',
+      'model.followDefault': 'Use default',
       'rename.title': 'Rename conversation',
       'rename.field': 'Conversation title',
       'rename.save': 'Save',
@@ -2900,6 +2938,20 @@ window.__ModuleLoader__.load({
               },
               h(Icon, { name: 'globe', size: 16 }),
             ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'cd-model-chip',
+                title: t('model.pick'),
+                'aria-label': t('model.pick'),
+                onClick: function () {
+                  props.onOpenModel();
+                },
+              },
+              h('span', { className: 'cd-model-chip-name' }, props.modelLabel),
+              h(Icon, { name: 'chevronDown', size: 14 }),
+            ),
           ),
           h(
             'div',
@@ -3039,9 +3091,17 @@ window.__ModuleLoader__.load({
       const [findOpen, setFindOpen] = useState(false);
       const [findQuery, setFindQuery] = useState('');
       const [findIndex, setFindIndex] = useState(0);
+      /** 模型选择：null = 跟随默认；目录由 Host 的 /models 提供。 */
+      const [modelChoice, setModelChoice] = useState(function () {
+        return loadModelChoice();
+      });
+      const [modelCatalog, setModelCatalog] = useState({ providers: [], current: null });
+      const [modelMenu, setModelMenu] = useState(false);
 
       const bodyRef = useRef(null);
       const findInputRef = useRef(null);
+      const modelChoiceRef = useRef(modelChoice);
+      modelChoiceRef.current = modelChoice;
       const textareaRef = useRef(null);
       const abortRef = useRef(null);
       const recorderRef = useRef(null);
@@ -3169,6 +3229,40 @@ window.__ModuleLoader__.load({
         setFindQuery('');
         setFindIndex(0);
       }, []);
+
+      const loadModels = useCallback(async function () {
+        try {
+          const response = await fetch(`${API}/models`, { headers: { accept: 'application/json' } });
+          if (!response.ok) return;
+          const body = await response.json();
+          if (body && Array.isArray(body.providers)) {
+            setModelCatalog({ providers: body.providers, current: body.current || null });
+          }
+        } catch (error) {
+          /* keep the catalog we already have */
+        }
+      }, []);
+
+      useEffect(
+        function () {
+          loadModels();
+        },
+        [loadModels],
+      );
+
+      useEffect(
+        function () {
+          if (!modelMenu) return;
+          const onKey = function (event) {
+            if (event.key === 'Escape') setModelMenu(false);
+          };
+          window.addEventListener('keydown', onKey);
+          return function () {
+            window.removeEventListener('keydown', onKey);
+          };
+        },
+        [modelMenu],
+      );
 
       // 切换会话时收起查找条，避免旧查询挂在新对话上。
       useEffect(
@@ -3572,6 +3666,7 @@ window.__ModuleLoader__.load({
           const payload = {
             thinking: deepThinking === true,
             search: webSearch === true,
+            ...(modelChoiceRef.current ? { model: modelChoiceRef.current } : {}),
             query: lastUser && typeof lastUser.text === 'string' ? lastUser.text : '',
             messages: history.map(function (message) {
               return { role: message.role, text: composeMessageText(message) };
@@ -4521,6 +4616,84 @@ window.__ModuleLoader__.load({
         );
       };
 
+      /** 把 provider/model 解析成展示名；目录里没有时退回 id。 */
+      const modelName = function (selection) {
+        if (!selection) return t('model.default');
+        const provider = modelCatalog.providers.find(function (entry) {
+          return entry.id === selection.provider;
+        });
+        const model =
+          provider && Array.isArray(provider.models)
+            ? provider.models.find(function (item) {
+                return item.id === selection.model;
+              })
+            : null;
+        return model && model.name ? model.name : selection.model;
+      };
+
+      const pickModel = function (choice) {
+        setModelChoice(choice);
+        saveModelChoice(choice);
+        setModelMenu(false);
+      };
+
+      const renderModelMenu = function () {
+        const rows = [];
+        rows.push(
+          h(
+            'button',
+            {
+              key: 'auto',
+              type: 'button',
+              role: 'menuitemradio',
+              'aria-checked': modelChoice === null ? 'true' : 'false',
+              className: 'cd-session-menu-item',
+              onClick: function () {
+                pickModel(null);
+              },
+            },
+            h(Icon, { name: 'sparkle', size: 15 }),
+            h('span', { className: 'cd-model-name' }, t('model.followDefault')),
+            modelChoice === null ? h(Icon, { name: 'check', size: 15 }) : null,
+          ),
+        );
+        modelCatalog.providers.forEach(function (provider) {
+          if (!Array.isArray(provider.models) || provider.models.length === 0) return;
+          rows.push(h('div', { key: 'p-' + provider.id, className: 'cd-model-group' }, provider.name || provider.id));
+          provider.models.forEach(function (model) {
+            const active = modelChoice !== null && modelChoice.provider === provider.id && modelChoice.model === model.id;
+            rows.push(
+              h(
+                'button',
+                {
+                  key: 'm-' + provider.id + '-' + model.id,
+                  type: 'button',
+                  role: 'menuitemradio',
+                  'aria-checked': active ? 'true' : 'false',
+                  className: 'cd-session-menu-item',
+                  onClick: function () {
+                    pickModel({ provider: provider.id, model: model.id });
+                  },
+                },
+                h('span', { className: 'cd-model-name' }, model.name),
+                active ? h(Icon, { name: 'check', size: 15 }) : null,
+              ),
+            );
+          });
+        });
+        return h(
+          'div',
+          { className: 'cd-model-layer' },
+          h('div', {
+            className: 'cd-model-mask',
+            onClick: function () {
+              setModelMenu(false);
+            },
+          }),
+          h('div', { className: 'cd-model-menu', role: 'menu', 'aria-label': t('model.pick') }, rows),
+        );
+      };
+
       const renderThread = function () {
         if (!activeThread) return null;
         const messages = activeThread.messages;
@@ -4788,6 +4961,7 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'cd-input-area' },
+            modelMenu ? renderModelMenu() : null,
             undoDelete !== null
               ? h(
                   'div',
@@ -4823,6 +4997,11 @@ window.__ModuleLoader__.load({
                 },
                 onToggleSearch: function () {
                   setSearch(!search);
+                },
+                modelLabel: modelName(modelChoice || modelCatalog.current),
+                onOpenModel: function () {
+                  setModelMenu(true);
+                  loadModels();
                 },
                 home: !hasMessages,
                 textareaRef: textareaRef,
@@ -5200,6 +5379,14 @@ mark.cd-mark{padding:0 1px;border-radius:3px;background:color-mix(in srgb,var(--
 .cd-hit{scroll-margin-block:96px}
 .cd-hit-active mark.cd-mark{background:var(--dsw-alias-state-warn-primary);color:#1f1f1f;box-shadow:none}
 .cd-hit-active .cd-bubble{box-shadow:0 0 0 2px color-mix(in srgb,var(--dsw-alias-state-warn-primary) 55%,transparent)}
+.cd-model-chip{box-sizing:border-box;display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:210px;height:28px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:transparent;color:var(--dsw-alias-label-secondary);font:12px/16px var(--dsw-font-family);cursor:pointer}
+.cd-model-chip:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.cd-model-chip-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cd-model-layer{position:absolute;inset:0;z-index:30;pointer-events:none}
+.cd-model-mask{position:fixed;inset:0;pointer-events:auto}
+.cd-model-menu{position:absolute;left:10px;bottom:calc(100% - 4px);z-index:31;box-sizing:border-box;display:flex;flex-direction:column;width:250px;max-height:min(420px,72vh);overflow-y:auto;padding:5px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-overlay,var(--dsw-alias-bg-layer-2));box-shadow:0 16px 40px rgba(0,0,0,.28);pointer-events:auto}
+.cd-model-group{padding:8px 10px 4px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;letter-spacing:.02em}
+.cd-model-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cd-delete-actions{display:flex;gap:10px;margin-top:22px}
 .cd-confirm-pill{display:inline-flex;flex:1;align-items:center;justify-content:center;height:40px;padding:0 14px;border:none;border-radius:999px;font-family:inherit;font-size:14px;font-weight:500;line-height:20px;white-space:nowrap;cursor:pointer;transition:background-color .15s,opacity .15s}
 .cd-confirm-pill:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}

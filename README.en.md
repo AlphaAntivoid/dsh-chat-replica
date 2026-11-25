@@ -31,6 +31,10 @@ Find in a conversation: press Ctrl/Cmd+F, matches are highlighted, and the curre
 
 ![Find in conversation](media/screenshots/find-dark.png)
 
+Model picker: the composer shows the current model; open it to switch between providers, or go back to the default.
+
+![Model picker](media/screenshots/model-dark.png)
+
 Light theme:
 
 ![Light theme](media/screenshots/light.png)
@@ -46,6 +50,7 @@ Light theme:
 - A user message can be edited and re-answered: saving truncates to that message and discards what follows (Ctrl/Cmd+Enter saves, Esc cancels)
 - A single conversation can be exported as a **Markdown** reading copy; JSON remains the backup and re-import format
 - Find in a conversation: Ctrl/Cmd+F highlights matches, marks the current one solid, Enter / Shift+Enter jump, Esc closes
+- Model picker: the composer shows the current model; switch per provider or fall back to the default. The choice is stored locally and sent with each request; an unknown model falls back to the default
 - Message bubbles, welcome screen, composer, Markdown (headings / lists / inline code / code blocks) and a collapsible "Thought" block
 - Upload text files, voice input, send / stop on the right of the composer
 - "Deep thinking" maps to the model's reasoningEffort (on = max, off = off; levels come from the model declaration)
@@ -148,7 +153,7 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 
 | File | Purpose |
 | --- | --- |
-| `index.js` | Host half: `/chat-replica/chat` (NDJSON model stream), `/chat-replica/transcribe` (16 kHz WAV to text), `/chat-replica/tts` (read-aloud PCM proxy), `/chat-replica/system-theme`, `/chat-replica/paths` (export folder shortcuts), `/chat-replica/export` (writes JSON to a directory) |
+| `index.js` | Host half: `/chat-replica/chat` (NDJSON model stream), `/chat-replica/models` (provider / model catalog), `/chat-replica/transcribe` (16 kHz WAV to text), `/chat-replica/tts` (read-aloud PCM proxy), `/chat-replica/system-theme`, `/chat-replica/paths` (export folder shortcuts), `/chat-replica/export` (writes JSON or Markdown) |
 | `client.js` | Browser half: the `main` page plus the `sidebar.panellist` icon, with CSS, the Chinese and English dictionaries, Markdown, recording and upload |
 | `cordis.patch.yml` | Bundle patch, read by the Plugin Manager at install time |
 | `locale/zh.json`, `locale/en.json` | Name and description shown in the Plugin Manager |
@@ -166,11 +171,13 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 
 ## How it works
 
-1. The page sends `POST /chat-replica/chat` with `{messages:[{role,text}], thinking, search, query}`.
-2. With search on, the Host calls `web.search()` first (streaming `search:start/done` frames back to the page)
-   and fetches the first two pages; then it reads provider/model from `agentDefaultModel.currentSelection()`,
-   picks the reasoningEffort from the toggle and calls `ctx.llm.stream()`, writing `text-delta` /
-   `reasoning-delta` as NDJSON lines.
+1. The page sends `POST /chat-replica/chat` with `{messages:[{role,text}], thinking, search, query, model?}`;
+   `model` is the page's `{provider, model}` choice and is absent when following the profile default.
+2. The Host validates a page choice with `resolveModelInfo()`: a known model wins, anything else falls back to
+   `agentDefaultModel.currentSelection()`, and the stream starts with a `{type:'model'}` frame reporting the
+   actual selection. With search on, the Host calls `web.search()` first (streaming `search:start/done` frames
+   back to the page) and fetches the first two pages; then it picks the reasoningEffort from the toggle and
+   calls `ctx.llm.stream()`, writing `text-delta` / `reasoning-delta` as NDJSON lines.
 3. The page folds the deltas into message bubbles; `reasoning` renders as a collapsible "Thought" block.
    Stopping aborts the request, which cancels the model stream on the Host.
 4. Voice: the page records 16 kHz mono PCM with Web Audio, wraps it in a WAV container and uploads it; the Host

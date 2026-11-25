@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.13.0
+
+### 中文
+
+- 新增模型选择器：输入框下方显示当前模型，菜单按 provider 分组列出可用模型，并可切回「跟随默认」
+- 选择存 `deepseek-chat-ui.model.v1` 并随每次请求发送；Host 用 `resolveModelInfo()` 校验，不认识的模型回退默认，并在流开头回一帧实际使用的模型
+- 新增 `GET /chat-replica/models`：只列出目录可读的 provider，附带当前默认选择
+- Host 测试覆盖目录、跳过坏目录与选择回退；渲染测试覆盖分组、切换与持久化（146 条断言）
+
+### English
+
+- Added a model picker: the composer shows the current model, the menu groups models by provider, and "Use default" goes back to the profile selection
+- The choice lives in `deepseek-chat-ui.model.v1` and is sent with every request; the Host validates it with `resolveModelInfo()`, falls back to the default for unknown models, and reports the actual model in the first stream frame
+- Added `GET /chat-replica/models`, which lists only providers with a readable catalog plus the current default
+- Host tests cover the catalog, skipped providers and selection fallback; render tests cover grouping, switching and persistence (146 assertions)
+
 ## 1.12.0
 
 ### 中文

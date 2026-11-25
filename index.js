@@ -87,6 +87,10 @@ async function handle(req, res, ctx) {
     sendJson(res, 200, { scheme: await readSystemScheme() });
     return;
   }
+  if (url.pathname === `${ROUTE_PREFIX}/models`) {
+    sendJson(res, 200, await listModelCatalog(ctx));
+    return;
+  }
   if (url.pathname === `${ROUTE_PREFIX}/paths`) {
     sendJson(res, 200, { dirs: exportPaths() });
     return;
@@ -140,8 +144,8 @@ async function health(ctx) {
 async function chatStream(req, res, ctx) {
   const llm = ctx.get('llm');
   if (llm === undefined) return sendJson(res, 503, { error: 'llm-unavailable' });
-  const selection = readSelection(ctx);
-  if (selection === undefined) return sendJson(res, 503, { error: 'model-unavailable' });
+  const fallback = readSelection(ctx);
+  if (fallback === undefined) return sendJson(res, 503, { error: 'model-unavailable' });
 
   let payload;
   try {
@@ -150,6 +154,7 @@ async function chatStream(req, res, ctx) {
     return sendJson(res, 400, { error: 'bad-json', message: messageOf(error) });
   }
 
+  const selection = await resolveRequestSelection(llm, payload.model, fallback);
   const messages = toRequestMessages(payload.messages, selection.provider, selection.model);
   if (messages.length === 0) return sendJson(res, 400, { error: 'empty' });
 
@@ -170,6 +175,7 @@ async function chatStream(req, res, ctx) {
       /* the peer is gone; the abort below unwinds the model stream */
     }
   };
+  write({ type: 'model', provider: selection.provider, model: selection.model });
 
   const thinking = payload.thinking === true;
   const wantsSearch = payload.search === true;
@@ -248,6 +254,67 @@ function readSelection(ctx) {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Every provider the profile has registered, with the models it advertises.
+ * Providers whose catalog cannot be read (not configured, unreachable) are
+ * skipped instead of failing the whole list.
+ *
+ * @param ctx - Host plugin context carrying `llm`.
+ * @returns `{ providers: [{ id, name, models: [{ id, name }] }], current }`.
+ */
+export async function listModelCatalog(ctx) {
+  const llm = ctx.get('llm');
+  const current = readSelection(ctx) ?? null;
+  if (llm === undefined) return { providers: [], current };
+  let providers = [];
+  try {
+    providers = llm.listProviders();
+  } catch (error) {
+    providers = [];
+  }
+  const out = [];
+  for (const provider of providers) {
+    if (typeof provider?.id !== 'string' || provider.id === '') continue;
+    try {
+      const models = await llm.listModels(provider.id);
+      out.push({
+        id: provider.id,
+        name: typeof provider.name === 'string' ? provider.name : provider.id,
+        models: models.map((model) => ({
+          id: model.id,
+          name: typeof model.name === 'string' ? model.name : model.id,
+        })),
+      });
+    } catch (error) {
+      /* provider without a readable catalog */
+    }
+  }
+  return { providers: out, current };
+}
+
+/**
+ * Resolve the model route for one chat request. An explicit choice from the page
+ * wins only when the provider actually knows that model; anything else keeps the
+ * profile default, so a stale choice never breaks the conversation.
+ *
+ * @param llm - Host `llm` service.
+ * @param requested - `{ provider, model }` from the page, or undefined.
+ * @param fallback - Profile default selection.
+ * @returns The selection to use for this request.
+ */
+export async function resolveRequestSelection(llm, requested, fallback) {
+  if (requested === null || typeof requested !== 'object') return fallback;
+  const provider = typeof requested.provider === 'string' ? requested.provider.trim() : '';
+  const model = typeof requested.model === 'string' ? requested.model.trim() : '';
+  if (provider === '' || model === '') return fallback;
+  try {
+    await llm.resolveModelInfo(provider, model);
+  } catch (error) {
+    return fallback;
+  }
+  return { provider, model };
 }
 
 /* ------------------------------------------------------------- transcribe */

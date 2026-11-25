@@ -54,6 +54,23 @@ async function main() {
   }
 
   // End-to-end: one conversation through the real export route into a temp dir.
+  const fakeLlm = {
+    listProviders: () => [
+      { id: 'deepseek', name: 'DeepSeek' },
+      { id: 'broken', name: 'Broken' },
+    ],
+    listModels: async (provider) => {
+      if (provider === 'broken') throw new Error('no catalog');
+      return [{ id: provider + '-chat', name: 'DeepSeek Chat' }];
+    },
+    resolveModelInfo: async (provider, model) => {
+      if (provider === 'deepseek' && model === 'deepseek-chat') return { provider, id: model, name: 'DeepSeek Chat' };
+      throw new Error('unknown model');
+    },
+  };
+  const fakeDefaultModel = {
+    currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-chat' }),
+  };
   const routes = [];
   host.apply({
     effect: (factory) => {
@@ -64,6 +81,11 @@ async function main() {
         routes.push(route);
         return () => {};
       },
+    },
+    get: (name) => {
+      if (name === 'llm') return fakeLlm;
+      if (name === 'agentDefaultModel') return fakeDefaultModel;
+      return undefined;
     },
   });
   assert.equal(routes.length, 1, 'the export route is registered');
@@ -159,6 +181,42 @@ async function main() {
   for (const entry of pathsBody.dirs) {
     assert.ok(fs.existsSync(entry.path), 'a returned shortcut exists: ' + entry.path);
   }
+
+  // The model catalog skips providers without a readable catalog.
+  const modelsResponse = {
+    writableEnded: false,
+    writeHead(status, headers) {
+      this.statusCode = status;
+      this.headers = headers;
+    },
+    end(payload) {
+      this.writableEnded = true;
+      this.body = String(payload ?? '');
+    },
+  };
+  await routes[0].handler({ method: 'GET', url: '/chat-replica/models' }, modelsResponse);
+  assert.equal(modelsResponse.statusCode, 200, 'the models route answers 200');
+  const catalog = JSON.parse(modelsResponse.body);
+  assert.equal(catalog.providers.length, 1, 'only providers with a readable catalog are listed');
+  assert.equal(catalog.providers[0].models[0].name, 'DeepSeek Chat', 'model names are listed');
+  assert.equal(catalog.current.model, 'deepseek-chat', 'the current selection is reported');
+
+  // An explicit selection wins only when the provider knows that model.
+  assert.deepEqual(
+    await host.resolveRequestSelection(fakeLlm, { provider: 'deepseek', model: 'deepseek-chat' }, { provider: 'x', model: 'y' }),
+    { provider: 'deepseek', model: 'deepseek-chat' },
+    'a known selection is used',
+  );
+  assert.deepEqual(
+    await host.resolveRequestSelection(fakeLlm, { provider: 'deepseek', model: 'nope' }, { provider: 'x', model: 'y' }),
+    { provider: 'x', model: 'y' },
+    'an unknown model falls back to the default',
+  );
+  assert.deepEqual(
+    await host.resolveRequestSelection(fakeLlm, null, { provider: 'x', model: 'y' }),
+    { provider: 'x', model: 'y' },
+    'no selection falls back to the default',
+  );
 
   console.log('PASS: host export directory resolution, single-thread export and folder shortcuts');
 }

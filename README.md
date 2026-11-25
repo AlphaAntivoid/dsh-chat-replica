@@ -30,6 +30,10 @@
 
 ![会话内查找](media/screenshots/find-dark.png)
 
+模型选择：输入框下方显示当前模型，点开按 provider 分组切换，也可以切回「跟随默认」。
+
+![模型选择](media/screenshots/model-dark.png)
+
 浅色主题：
 
 ![浅色主题](media/screenshots/light.png)
@@ -45,6 +49,7 @@
 - 用户消息可「编辑」并重新生成：保存后截断到该条、丢弃之后的内容（Ctrl/Cmd+Enter 保存，Esc 取消）
 - 单条会话可导出为 **Markdown** 阅读稿；JSON 仍用于备份与再导入
 - 会话内查找：`Ctrl/Cmd+F`，命中词高亮、当前命中实色，回车 / Shift+回车上下跳转，Esc 关闭
+- 模型选择：输入框下方显示当前模型，按 provider 分组切换，可切回「跟随默认」；选择存本地并随请求发送，Host 校验失败会回退默认
 - 消息气泡、欢迎语、输入框，Markdown（标题 / 列表 / 行内代码 / 代码块）与「已思考」折叠块
 - 输入框右侧：📎 上传文本文件、🎤 语音输入、发送 / 停止
 - 「深度思考」映射到模型的 reasoningEffort（开 = max，关 = off，档位取自模型声明）
@@ -140,7 +145,7 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
 
 | 文件 | 作用 |
 | --- | --- |
-| `index.js` | Host 半边：`/chat-replica/chat`（NDJSON 模型流）、`/chat-replica/transcribe`（16k WAV 转文字）、`/chat-replica/tts`（朗读 PCM 代理）、`/chat-replica/system-theme`、`/chat-replica/paths`（导出快捷目录）、`/chat-replica/export`（写 JSON 到指定目录） |
+| `index.js` | Host 半边：`/chat-replica/chat`（NDJSON 模型流）、`/chat-replica/models`（可用 provider / model 目录）、`/chat-replica/transcribe`（16k WAV 转文字）、`/chat-replica/tts`（朗读 PCM 代理）、`/chat-replica/system-theme`、`/chat-replica/paths`（导出快捷目录）、`/chat-replica/export`（写 JSON / Markdown 到指定目录） |
 | `client.js` | 浏览器半边：`main` 页面 + `sidebar.panellist` 图标，内含 CSS、中英文字典、Markdown、录音与上传 |
 | `cordis.patch.yml` | bundle 补丁（安装时由 Plugin Manager 读取） |
 | `locale/zh.json`、`locale/en.json` | Plugin Manager 里显示的名称与描述 |
@@ -158,9 +163,12 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
 
 ## 数据流
 
-1. 页面 `POST /chat-replica/chat`，body 是 `{messages:[{role,text}], thinking, search, query}`。
-2. 开关 search 时先 `web.search()`（并把 `search:start/done` 帧回传页面），再抓前两条正文；
-   然后取 `agentDefaultModel.currentSelection()` 的 provider/model，按开关选 reasoningEffort，调用
+1. 页面 `POST /chat-replica/chat`，body 是 `{messages:[{role,text}], thinking, search, query, model?}`；
+   `model` 是页面上选的 `{provider, model}`，缺省表示跟随配置。
+2. Host 先用 `resolveModelInfo()` 校验页面给的模型：认识就用，否则回退
+   `agentDefaultModel.currentSelection()`，并在流开头回一帧 `{type:'model'}` 说明实际选择。
+   开关 search 时先 `web.search()`（并把 `search:start/done` 帧回传页面），再抓前两条正文；
+   然后取 provider/model，按开关选 reasoningEffort，调用
    `ctx.llm.stream()`，把 `text-delta` / `reasoning-delta` 逐行写成 NDJSON。
 3. 页面把增量折进消息气泡，`reasoning` 显示为可折叠的「已思考」块；停止生成会 abort 请求，
    Host 端随之取消模型流。
