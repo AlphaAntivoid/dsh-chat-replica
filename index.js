@@ -600,11 +600,13 @@ function sanitizeThread(thread) {
   return {
     title: typeof thread?.title === 'string' ? thread.title : '',
     updatedAt: typeof thread?.updatedAt === 'number' ? thread.updatedAt : Date.now(),
+    ...(typeof thread?.pinnedAt === 'number' ? { pinnedAt: thread.pinnedAt } : {}),
     messages: messages
       .filter((message) => message !== null && typeof message === 'object')
       .map((message) => ({
         role: message.role === 'assistant' ? 'assistant' : 'user',
         text: typeof message.text === 'string' ? message.text : '',
+        ...(typeof message.at === 'number' ? { at: message.at } : {}),
         ...(Array.isArray(message.files) && message.files.length > 0
           ? {
               files: message.files.map((file) => ({

@@ -3,6 +3,18 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.5.2
+
+### 中文
+
+- 修复导出文件丢字段：Host 的导出清洗现在保留 `pinnedAt` 与每条消息的 `at`，置顶状态和时间戳在导出 / 导入后不再丢失
+- Host 新增端到端测试：把单条会话经真实路由写进临时目录，并校验 `pinnedAt` / `at` 保真
+
+### English
+
+- Fixed lost fields in exported files: the Host sanitizer now keeps `pinnedAt` and each message's `at`, so pin state and timestamps survive export and import
+- Added an end-to-end Host test that exports one conversation through the real route into a temporary folder and checks both fields
+
 ## 1.5.1
 
 ### 中文

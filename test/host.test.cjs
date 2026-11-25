@@ -7,6 +7,8 @@
  */
 const assert = require('node:assert/strict');
 const os = require('node:os');
+const fs = require('node:fs');
+const { Readable } = require('node:stream');
 const path = require('node:path');
 
 const existsIn = (set) => (dir) => set.includes(dir);
@@ -51,7 +53,64 @@ async function main() {
     );
   }
 
-  console.log('PASS: host export directory resolution');
+  // End-to-end: one conversation through the real export route into a temp dir.
+  const routes = [];
+  host.apply({
+    effect: (factory) => {
+      factory();
+    },
+    webServer: {
+      register: (route) => {
+        routes.push(route);
+        return () => {};
+      },
+    },
+  });
+  assert.equal(routes.length, 1, 'the export route is registered');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-export-'));
+  const thread = {
+    title: '单条导出',
+    updatedAt: 1700000000000,
+    pinnedAt: 1700000000500,
+    messages: [
+      { role: 'user', text: '你好', at: 1700000000001 },
+      { role: 'assistant', text: '你好呀', at: 1700000000002 },
+    ],
+  };
+  const request = Readable.from([
+    Buffer.from(JSON.stringify({ dir, threads: [thread] }), 'utf8'),
+  ]);
+  request.method = 'POST';
+  request.url = '/chat-replica/export';
+  const response = {
+    writableEnded: false,
+    statusCode: 0,
+    body: '',
+    writeHead(status, headers) {
+      this.statusCode = status;
+      this.headers = headers;
+    },
+    end(payload) {
+      this.writableEnded = true;
+      this.body = String(payload ?? '');
+    },
+  };
+  await routes[0].handler(request, response);
+
+  assert.equal(response.statusCode, 200, 'the export route answers 200: ' + response.body);
+  const result = JSON.parse(response.body);
+  assert.equal(result.count, 1, 'one conversation was exported');
+  assert.ok(result.path.startsWith(dir), 'the file lands in the requested folder');
+  assert.ok(fs.existsSync(result.path), 'the exported file exists');
+
+  const saved = JSON.parse(fs.readFileSync(result.path, 'utf8'));
+  assert.equal(saved.threads.length, 1, 'the file holds one conversation');
+  assert.equal(saved.threads[0].pinnedAt, 1700000000500, 'the pin state survives the export');
+  assert.equal(saved.threads[0].messages[0].at, 1700000000001, 'message timestamps survive the export');
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  console.log('PASS: host export directory resolution and single-thread export');
 }
 
 main().catch((error) => {
