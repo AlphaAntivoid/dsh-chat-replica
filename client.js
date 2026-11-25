@@ -40,6 +40,9 @@ window.__ModuleLoader__.load({
       'action.delete': '删除对话',
       'action.copy': '复制',
       'action.copied': '已复制',
+      'action.fork': '分叉',
+      'fork.suffix': '分叉',
+      'toast.forked': '已分叉到新对话',
       'action.regenerate': '重新生成',
       'action.attach': '上传文件',
       'action.voice': '语音输入',
@@ -173,6 +176,9 @@ window.__ModuleLoader__.load({
       'action.delete': 'Delete conversation',
       'action.copy': 'Copy',
       'action.copied': 'Copied',
+      'action.fork': 'Fork',
+      'fork.suffix': 'fork',
+      'toast.forked': 'Forked into a new conversation',
       'action.regenerate': 'Regenerate',
       'action.attach': 'Attach file',
       'action.voice': 'Voice input',
@@ -459,6 +465,12 @@ window.__ModuleLoader__.load({
         ['path', { d: 'M12 4v11' }],
         ['path', { d: 'M7.5 10.5L12 15l4.5-4.5' }],
         ['path', { d: 'M4.5 18.5h15' }],
+      ],
+      fork: [
+        ['circle', { cx: 7, cy: 6.5, r: 2 }],
+        ['circle', { cx: 7, cy: 17.5, r: 2 }],
+        ['circle', { cx: 17, cy: 11, r: 2 }],
+        ['path', { d: 'M7 8.5v7M9 6.5h3.5a4.5 4.5 0 0 1 4.5 4.5' }],
       ],
       chevronLeft: [['path', { d: 'M14.5 6l-6 6 6 6' }]],
       chevronDown: [['path', { d: 'M6 9.5l6 6 6-6' }]],
@@ -3358,6 +3370,33 @@ window.__ModuleLoader__.load({
         setPending(false);
       }, []);
 
+      /** 从某条回答分叉：把到该条为止的消息复制成新会话，接着换个方向继续问。 */
+      const forkThread = useCallback(
+        function (messageId) {
+          const source = activeThread;
+          if (!source) return;
+          const index = source.messages.findIndex(function (message) {
+            return message.id === messageId;
+          });
+          if (index < 0) return;
+          const messages = source.messages.slice(0, index + 1).map(function (message) {
+            return Object.assign({}, message, { id: newId('m') });
+          });
+          const forked = {
+            id: newId('c'),
+            title: source.title + ' · ' + t('fork.suffix'),
+            updatedAt: Date.now(),
+            messages: messages,
+          };
+          const next = [forked].concat(threads);
+          setThreads(next);
+          setActiveId(forked.id);
+          saveNow(next, forked.id);
+          showToast(t('toast.forked'));
+        },
+        [activeThread, threads, t, saveNow, showToast],
+      );
+
       const copy = function (message) {
         const finish = function () {
           setCopiedId(message.id);
@@ -3896,6 +3935,21 @@ window.__ModuleLoader__.load({
                 h(Icon, { name: speakingId === message.id ? 'stop' : 'volume', size: 16 }),
               )
             : null,
+          message.role === 'assistant' && message.text
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'cd-act',
+                  title: t('action.fork'),
+                  'aria-label': t('action.fork'),
+                  onClick: function () {
+                    forkThread(message.id);
+                  },
+                },
+                h(Icon, { name: 'fork', size: 16 }),
+              )
+            : null,
           h(
             'button',
             {
@@ -4333,7 +4387,7 @@ window.__ModuleLoader__.load({
 .cd-section{position:relative;margin-top:16px;padding-top:4px}
 .cd-section:first-child{margin-top:0}
 .cd-section-header{position:sticky;top:0;z-index:20;padding:2px 10px;background-color:var(--dsw-specific-sidebar-fill);color:var(--dsw-alias-label-tertiary);font-size:12px;font-weight:500;line-height:18px;user-select:none}
-.cd-item{box-sizing:border-box;position:relative;display:flex;align-items:center;height:40px;padding:9px 6px 9px 10px;border-radius:12px;color:var(--dsw-alias-label-primary);font-size:14px;line-height:22px;cursor:pointer}
+.cd-item{box-sizing:border-box;position:relative;display:flex;align-items:center;height:40px;padding:9px 6px 9px 10px;border-radius:12px;color:var(--dsw-alias-label-primary);font-size:14px;line-height:22px;cursor:pointer;content-visibility:auto;contain-intrinsic-size:auto 40px}
 .cd-item-active{background-color:var(--dsw-specific-sidebar-nav-item-active-accent);color:var(--dsw-alias-brand-primary-invert)}
 @media (hover:hover){.cd-item:not(.cd-item-active):hover{background-color:var(--dsw-specific-sidebar-nav-item-hover)}}
 .cd-item:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}

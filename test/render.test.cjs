@@ -1034,6 +1034,26 @@ async function main() {
     console.log('PASS 23: Enter opens the first search result');
   }
 
+  /* --- 24. an answer can be forked into a new conversation ----------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    const forkButton = collect(
+      tree,
+      (node) => node.kind === 'host' && node.props['aria-label'] === '分叉',
+    )[0];
+    assert(forkButton, 'the assistant answer offers a fork action');
+    click(forkButton);
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 6, 'forking adds a conversation');
+    const title = textOf(byClass(tree, 'cd-header-title')[0]).trim();
+    assert(title.indexOf('分叉') >= 0, 'the forked conversation has a distinct title: ' + title);
+    assert(byClass(tree, 'cd-md').length >= 1, 'the forked conversation keeps the copied answer');
+    console.log('PASS 24: an answer can be forked into a new conversation');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 

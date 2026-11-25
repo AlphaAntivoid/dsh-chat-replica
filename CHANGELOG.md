@@ -3,6 +3,20 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.7.0
+
+### 中文
+
+- 新增「分叉」：任意一条回答的操作行可把会话复制到该回答为止，生成新会话（标题带「· 分叉」），便于换个方向继续；分叉不继承置顶
+- 会话行启用 `content-visibility:auto`，长列表只渲染视口附近的行，滚动更轻
+- 消息操作行新增分叉按钮（复制 / 朗读旁），键盘可聚焦
+
+### English
+
+- Added Fork: the action row of any answer copies the conversation up to that answer into a new conversation titled "· fork", so you can continue in another direction; pin state is not inherited
+- Conversation rows use `content-visibility:auto`, so long lists only render what is near the viewport
+- The message action row gains a fork button next to copy / read-aloud, and it is keyboard focusable
+
 ## 1.6.0
 
 ### 中文
