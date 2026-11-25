@@ -41,6 +41,11 @@ window.__ModuleLoader__.load({
       'action.copy': '复制',
       'action.copied': '已复制',
       'action.fork': '分叉',
+      'action.edit': '编辑',
+      'edit.title': '编辑消息',
+      'edit.field': '消息内容',
+      'edit.submit': '保存并重新生成',
+      'edit.hint': '保存后从这条消息重新回答，之后的内容会被丢弃。',
       'fork.suffix': '分叉',
       'toast.forked': '已分叉到新对话',
       'action.regenerate': '重新生成',
@@ -177,6 +182,11 @@ window.__ModuleLoader__.load({
       'action.copy': 'Copy',
       'action.copied': 'Copied',
       'action.fork': 'Fork',
+      'action.edit': 'Edit',
+      'edit.title': 'Edit message',
+      'edit.field': 'Message',
+      'edit.submit': 'Save and regenerate',
+      'edit.hint': 'Saving replies again from this message; everything after it is discarded.',
       'fork.suffix': 'fork',
       'toast.forked': 'Forked into a new conversation',
       'action.regenerate': 'Regenerate',
@@ -2418,6 +2428,109 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 编辑一条用户消息：保存后截断到该条并重新生成回答。
+     * Ctrl/Cmd+Enter 保存，Esc 取消，Tab 限制在对话框内。
+     */
+    function EditDialog(props) {
+      const t = props.t;
+      const [draft, setDraft] = useState(props.initial || '');
+      const areaRef = useRef(null);
+      const cancelRef = useRef(null);
+      const saveRef = useRef(null);
+      const restoreRef = useRef(null);
+      useEffect(
+        function () {
+          restoreRef.current = document.activeElement;
+          const element = areaRef.current;
+          if (element) {
+            element.focus();
+            if (element.setSelectionRange) element.setSelectionRange(element.value.length, element.value.length);
+          }
+          return function () {
+            const previous = restoreRef.current;
+            if (previous && previous.focus) previous.focus();
+          };
+        },
+        [],
+      );
+      const trimmed = draft.trim();
+      const blocked = trimmed === '';
+      const save = function () {
+        if (blocked) return;
+        props.onSave(trimmed);
+      };
+      const onDialogKeyDown = function (event) {
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          props.onCancel();
+          return;
+        }
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          save();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const fields = [areaRef.current, cancelRef.current, saveRef.current].filter(function (element) {
+          return element !== null && element !== undefined;
+        });
+        if (fields.length === 0) return;
+        const index = fields.indexOf(event.target);
+        if (index < 0) return;
+        event.preventDefault();
+        const next = event.shiftKey ? (index - 1 + fields.length) % fields.length : (index + 1) % fields.length;
+        if (fields[next].focus) fields[next].focus();
+      };
+      return h(
+        'div',
+        { className: 'cd-modal' },
+        h('div', { className: 'cd-modal-mask', onClick: props.onCancel }),
+        h(
+          'section',
+          {
+            className: 'cd-dialog',
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-label': t('edit.title'),
+            onKeyDown: onDialogKeyDown,
+          },
+          h('h3', { className: 'cd-dialog-title' }, t('edit.title')),
+          h('textarea', {
+            ref: areaRef,
+            className: 'cd-dialog-textarea',
+            value: draft,
+            'aria-label': t('edit.field'),
+            placeholder: t('edit.field'),
+            onChange: function (event) {
+              setDraft(event.target.value);
+            },
+          }),
+          h('p', { className: 'cd-dialog-hint' }, t('edit.hint')),
+          h(
+            'div',
+            { className: 'cd-dialog-actions' },
+            h(
+              'button',
+              { ref: cancelRef, type: 'button', className: 'cd-btn', onClick: props.onCancel },
+              t('action.cancel'),
+            ),
+            h(
+              'button',
+              {
+                ref: saveRef,
+                type: 'button',
+                className: 'cd-btn cd-btn-primary',
+                disabled: blocked,
+                onClick: save,
+              },
+              t('edit.submit'),
+            ),
+          ),
+        ),
+      );
+    }
+
+    /**
      * 删除确认：标题说明不可恢复，删除按钮为红色气泡 + 白字，
      * 取消按钮为灰白色 + 黑字并默认聚焦，所以回车等于取消。
      */
@@ -2737,6 +2850,7 @@ window.__ModuleLoader__.load({
       const [selectedIds, setSelectedIds] = useState([]);
       const [renameTarget, setRenameTarget] = useState(null);
       const [deleteTarget, setDeleteTarget] = useState(null);
+      const [editTarget, setEditTarget] = useState(null);
       /** 删除后 8 秒内可撤销；快照包含被删会话、草稿和当时的激活会话。 */
       const [undoDelete, setUndoDelete] = useState(null);
       const [storageError, setStorageError] = useState(false);
@@ -3370,6 +3484,30 @@ window.__ModuleLoader__.load({
         setPending(false);
       }, []);
 
+      /** 编辑某条用户消息：截断到该条并重新生成回答。 */
+      const applyEdit = useCallback(
+        function (messageId, text) {
+          const thread = activeThread;
+          if (!thread) return;
+          const index = thread.messages.findIndex(function (message) {
+            return message.id === messageId;
+          });
+          if (index < 0) return;
+          if (abortRef.current) abortRef.current.abort();
+          setPending(false);
+          const edited = Object.assign({}, thread.messages[index], { text: text });
+          const history = thread.messages.slice(0, index).concat(edited);
+          setThreads(function (previous) {
+            return previous.map(function (item) {
+              if (item.id !== thread.id) return item;
+              return Object.assign({}, item, { updatedAt: Date.now(), messages: history });
+            });
+          });
+          runAssistant(thread.id, history, newId('a'), thinking, search);
+        },
+        [activeThread, thinking, search, runAssistant],
+      );
+
       /** 从某条回答分叉：把到该条为止的消息复制成新会话，接着换个方向继续问。 */
       const forkThread = useCallback(
         function (messageId) {
@@ -3950,6 +4088,21 @@ window.__ModuleLoader__.load({
                 h(Icon, { name: 'fork', size: 16 }),
               )
             : null,
+          message.role === 'user' && message.text
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'cd-act',
+                  title: t('action.edit'),
+                  'aria-label': t('action.edit'),
+                  onClick: function () {
+                    setEditTarget({ id: message.id, text: message.text });
+                  },
+                },
+                h(Icon, { name: 'pencil', size: 16 }),
+              )
+            : null,
           h(
             'button',
             {
@@ -4346,6 +4499,20 @@ window.__ModuleLoader__.load({
               },
               onConfirm: confirmDelete,
             }),
+        editTarget === null
+          ? null
+          : h(EditDialog, {
+              t: t,
+              initial: editTarget.text,
+              onCancel: function () {
+                setEditTarget(null);
+              },
+              onSave: function (text) {
+                const target = editTarget;
+                setEditTarget(null);
+                applyEdit(target.id, text);
+              },
+            }),
       );
     }
 
@@ -4623,6 +4790,9 @@ body[data-ds-dark-theme] .cd-send:disabled{opacity:.55}
 .cd-dialog-input{box-sizing:border-box;width:100%;height:40px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;outline:none;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:14px/22px var(--dsw-font-family)}
 .cd-dialog-input::placeholder{color:var(--dsw-alias-label-caption)}
 .cd-dialog-input:focus{border-color:var(--dsw-alias-brand-primary)}
+.cd-dialog-textarea{box-sizing:border-box;display:block;width:100%;min-height:120px;max-height:240px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;outline:none;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:14px/22px var(--dsw-font-family);resize:vertical}
+.cd-dialog-textarea:focus{border-color:var(--dsw-alias-brand-primary)}
+.cd-dialog-hint{margin:8px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
 .cd-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 .cd-delete-confirm{max-width:320px;padding:22px 20px 18px}
 .cd-delete-title{margin:0;color:var(--dsw-alias-label-primary);font-size:16px;font-weight:600;line-height:24px}

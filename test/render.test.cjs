@@ -1054,6 +1054,35 @@ async function main() {
     console.log('PASS 24: an answer can be forked into a new conversation');
   }
 
+  /* --- 25. a user message can be edited and re-answered -------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    const editButton = collect(
+      tree,
+      (node) => node.kind === 'host' && node.props['aria-label'] === '编辑',
+    )[0];
+    assert(editButton, 'the user message offers an edit action');
+    click(editButton);
+    tree = rerender();
+    const area = byClass(tree, 'cd-dialog-textarea')[0];
+    assert(area, 'the edit dialog opens with a textarea');
+    assert(area.props.value.length > 0, 'the textarea starts from the current message');
+    area.props.onChange({ target: { value: '改过的问题' } });
+    tree = rerender();
+    click(findByText(tree, '保存并重新生成')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-dialog').length === 0, 'the edit dialog closes');
+    assert(
+      textOf(byClass(tree, 'cd-bubble')[0]).trim() === '改过的问题',
+      'the edited message replaces the old one: ' + textOf(byClass(tree, 'cd-bubble')[0]),
+    );
+    assert(byClass(tree, 'cd-item').length === 5, 'editing does not add conversations');
+    console.log('PASS 25: a user message can be edited and re-answered');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 

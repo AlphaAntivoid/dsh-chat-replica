@@ -3,6 +3,20 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.8.0
+
+### 中文
+
+- 新增消息编辑：用户消息的操作行可「编辑」并重新生成，保存后截断到该条、丢弃之后的内容；`Ctrl/Cmd+Enter` 保存，`Esc` 取消
+- 编辑对话框有焦点陷阱与关闭后焦点还原，空内容不可提交
+- 与「分叉」一起构成完整的分支工作流：想保留原答案就分叉，想改问题就编辑重答
+
+### English
+
+- Added message editing: a user message's action row can edit and re-answer; saving truncates to that message and discards what follows, with `Ctrl/Cmd+Enter` to save and `Esc` to cancel
+- The edit dialog traps focus, restores it on close, and refuses empty content
+- Together with Fork this completes the branching workflow: fork to keep the old answer, edit to ask differently
+
 ## 1.7.0
 
 ### 中文
