@@ -1,6 +1,6 @@
 {
   "name": "@local/deepseek-chat-ui",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "DeepSeek chat-demo style conversation page for the DeepSeek Harness (DSH) Web UI",
   "license": "MIT",
   "author": "AlphaAntivoid",
@@ -25,7 +25,7 @@
   },
   "type": "module",
   "scripts": {
-    "test": "node test/render.test.cjs && node test/style.test.cjs && node test/metadata.test.cjs",
+    "test": "node test/render.test.cjs && node test/style.test.cjs && node test/metadata.test.cjs && node test/host.test.cjs",
     "bundle": "node scripts/bundle.mjs"
   },
   "exports": {

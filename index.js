@@ -17,10 +17,10 @@
 import { request as httpRequest } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { appendFileSync, readFileSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
+import { appendFileSync, readFileSync, statSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 
 const SYSTEM_PROMPT = [
   '你是 DeepSeek，一个乐于助人的 AI 助手。',
@@ -513,6 +513,40 @@ function htmlToText(html) {
 
 /* ------------------------------------------------------------------ export */
 
+/**
+ * Candidate directories for an export, most specific first.
+ *
+ * A requested directory is used only when it is an absolute path that currently
+ * exists — this honours Windows paths (`C:\\...`) as well as POSIX ones without
+ * creating bogus directories such as `\\sdcard\\Download` on Windows. Android's
+ * `/sdcard/Download` stays a candidate only where it really exists, then the
+ * platform download folders follow; those may be created on demand.
+ *
+ * @param requested - `dir` from the page, possibly empty.
+ * @param exists - predicate telling whether a directory currently exists.
+ * @returns Candidate directory paths, deduplicated on the first occurrence.
+ */
+export function exportCandidates(requested, exists) {
+  const list = [];
+  if (typeof requested === 'string' && requested.trim() !== '') {
+    const dir = requested.trim();
+    if (isAbsolute(dir) && exists(dir)) list.push(dir);
+  }
+  if (exists('/sdcard/Download')) list.push('/sdcard/Download');
+  list.push(join(homedir(), 'Downloads'));
+  list.push(join(homedir(), 'Download'));
+  list.push(join(homedir(), 'Documents'));
+  return list.filter((dir, index) => list.indexOf(dir) === index);
+}
+
+function isDirectory(path) {
+  try {
+    return statSync(path).isDirectory();
+  } catch (error) {
+    return false;
+  }
+}
+
 /** Write the page's conversations next to the user's other downloads. */
 async function exportConversations(req, res) {
   let payload;
@@ -540,17 +574,16 @@ async function exportConversations(req, res) {
   );
 
   const requested = typeof payload.dir === 'string' ? payload.dir.trim() : '';
-  const candidates = [];
-  if (requested.startsWith('/')) candidates.push(join(requested, name));
-  candidates.push(join('/sdcard/Download', name));
-  candidates.push(join(homedir(), 'Download', name));
+  const candidates = exportCandidates(requested, isDirectory);
 
   const failures = [];
-  for (const path of candidates) {
+  for (const dir of candidates) {
+    const path = join(dir, name);
     try {
+      await mkdir(dir, { recursive: true });
       await writeFile(path, text, 'utf8');
     } catch (error) {
-      failures.push(`${dirname(path)}: ${messageOf(error)}`);
+      failures.push(`${dir}: ${messageOf(error)}`);
       continue;
     }
     const result = { path, name, dir: dirname(path), count: threads.length, bytes: Buffer.byteLength(text) };

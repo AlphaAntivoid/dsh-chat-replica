@@ -151,7 +151,9 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
    `{text, voice_id: stella|tide, format: pcm, filter_markdown: true}`，返回 24 kHz 单声道 16 位 PCM；
    Host 用 profile 里的 `DEEPSEEK_API_KEY` 代发，页面按 `AudioContext(24000)` 排程播放。
 7. 导出走 `POST /chat-replica/export`（body 里带 `dir`）：Host 把 `{version, exportedAt, threads}`
-   写成 `<dir>/deepseek-chat-<本地时间>.json`，`dir` 无效或不可写时回退到默认的 Download 目录；
+   写成 `<dir>/deepseek-chat-<本地时间>.json`。`dir` 留空表示交给 Host 选：优先用页面给的目录（必须已存在），
+   其次是 Android 的 `/sdcard/Download`（仅在该路径存在时），再退到用户的 `Downloads` / `Download` /
+   `Documents`（不存在会自动创建）；响应里的 `dir` 就是实际写入位置。
    JSON 响应统一带 `cache-control: no-store, no-transform`：carrier 的 gzip 重写会提前发送响应头，
    导致浏览器报「Failed to fetch」。
    页面里的「导出位置」用 `uiWorkspace.listDirectory()` 做内置文件浏览，选择结果存在

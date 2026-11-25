@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
     const STORE_EXPORT_DIR = 'deepseek-chat-ui.export-dir.v1';
     const STORE_THEME_PREF = 'deepseek-chat-ui.theme-pref.v1';
     const STORE_TTS = 'deepseek-chat-ui.tts.v1';
-    const DEFAULT_EXPORT_DIR = '/sdcard/Download';
+    const DEFAULT_EXPORT_DIR = '';
     const DRAWER_MS = 200;
     /** 删除后允许撤销的时间窗（毫秒）；超过就真的没了。 */
     const UNDO_MS = 8000;
@@ -81,6 +81,7 @@ window.__ModuleLoader__.load({
       'settings.location': '导出位置',
       'settings.locationHint': '打开文件管理选择',
       'settings.locationSet': '导出位置：{path}',
+      'settings.locationDefault': '默认（系统下载目录）',
       'settings.browse': '选择导出文件夹',
       'settings.browseBack': '返回设置',
       'settings.browseUp': '上级',
@@ -210,6 +211,7 @@ window.__ModuleLoader__.load({
       'settings.location': 'Export folder',
       'settings.locationHint': 'Browse the file manager',
       'settings.locationSet': 'Export folder: {path}',
+      'settings.locationDefault': 'Default (system Downloads)',
       'settings.browse': 'Choose export folder',
       'settings.browseBack': 'Back to settings',
       'settings.browseUp': 'Up',
@@ -1402,7 +1404,10 @@ window.__ModuleLoader__.load({
           {
             key: 'export',
             title: t('settings.export'),
-            hint: shortPath(props.exportDir),
+            hint:
+              props.exportDir === ''
+                ? t('settings.locationDefault')
+                : shortPath(props.exportDir),
             action: t('settings.download'),
             disabled: busy || props.threadCount === 0,
             onClick: runExport,
@@ -1498,8 +1503,15 @@ window.__ModuleLoader__.load({
             ),
             h(
               'span',
-              { className: 'cd-browse-path', title: listing ? listing.path : props.exportDir },
-              listing ? shortPath(listing.path) : shortPath(props.exportDir),
+              {
+                className: 'cd-browse-path',
+                title: listing ? listing.path : props.exportDir === '' ? t('settings.locationDefault') : props.exportDir,
+              },
+              listing
+                ? shortPath(listing.path)
+                : props.exportDir === ''
+                  ? t('settings.locationDefault')
+                  : shortPath(props.exportDir),
             ),
             h(
               'button',
@@ -3726,7 +3738,8 @@ window.__ModuleLoader__.load({
         async function (path) {
           const workspace = props.getWorkspace ? props.getWorkspace() : null;
           if (!workspace || typeof workspace.listDirectory !== 'function') throw new Error('directory-unavailable');
-          return workspace.listDirectory(path);
+          // 空字符串表示「让 Host 用默认位置」，不要把它当成相对路径传下去。
+          return workspace.listDirectory(path === '' ? undefined : path);
         },
         [props],
       );

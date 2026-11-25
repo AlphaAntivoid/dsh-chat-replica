@@ -3,6 +3,20 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.5.1
+
+### 中文
+
+- 修复导出在 Windows 上总是失败：Host 现在接受 Windows 绝对路径（`C:\...`），并且只使用真实存在的目录；回退顺序改为「请求目录 → Android `/sdcard/Download`（存在时）→ 用户 Downloads / Download / Documents（自动创建）」
+- 「导出位置」默认值改成「默认（系统下载目录）」，不再显示 Android 专用路径
+- 新增 Host 侧单测覆盖目录解析；`npm test` 现在跑 4 个套件
+
+### English
+
+- Fixed exports always failing on Windows: the Host now accepts Windows absolute paths (`C:\...`) and only uses directories that exist; fallbacks are the requested folder → Android `/sdcard/Download` (when present) → the user's `Downloads` / `Download` / `Documents` (created on demand)
+- The default export folder is now "Default (system Downloads)" instead of an Android-only path
+- Added a Host-side test for the directory resolution; `npm test` now runs four suites
+
 ## 1.5.0
 
 ### 中文

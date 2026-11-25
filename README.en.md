@@ -161,8 +161,10 @@ Restart DSH to take effect. To uninstall, remove that insert and the
    proxies the call with the profile's `DEEPSEEK_API_KEY` and the page schedules playback through
    `AudioContext(24000)`.
 7. Export goes through `POST /chat-replica/export` (with `dir` in the body): the Host writes
-   `{version, exportedAt, threads}` to `<dir>/deepseek-chat-<local time>.json`, falling back to the default
-   Download directory when `dir` is missing or not writable. JSON responses carry
+   `{version, exportedAt, threads}` to `<dir>/deepseek-chat-<local time>.json`. An empty `dir` lets the Host
+   choose: the folder requested by the page when it is absolute and already exists, then Android's
+   `/sdcard/Download` (only where that path exists), then the user's `Downloads` / `Download` / `Documents`
+   (created when missing); the response's `dir` is where the file really landed. JSON responses carry
    `cache-control: no-store, no-transform`, because the carrier's gzip rewrite sends headers early and the
    browser reports "Failed to fetch". The "export folder" row uses `uiWorkspace.listDirectory()` for the built-in
    file browser and stores the choice in `deepseek-chat-ui.export-dir.v1`. Import reads the same shape (a bare
