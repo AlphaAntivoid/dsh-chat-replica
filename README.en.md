@@ -26,6 +26,8 @@ Light theme:
 ## Features
 
 - Conversation sidebar grouped by Today / Yesterday / Previous 7 days / Previous 30 days, persisted locally; the `☰` capsule opens the drawer and `＋` starts a new conversation
+- Conversation search filters titles and message bodies; Esc or the clear button in the field restores the full list
+- Drafts are stored per conversation: half a sentence typed in A never shows up in B, and it survives leaving the panel
 - Message bubbles, welcome screen, composer, Markdown (headings / lists / inline code / code blocks) and a collapsible "Thought" block
 - Upload text files, voice input, send / stop on the right of the composer
 - "Deep thinking" maps to the model's reasoningEffort (on = max, off = off; levels come from the model declaration)

@@ -699,6 +699,62 @@ async function main() {
     console.log('PASS 10: rename survives leaving and re-entering the panel');
   }
 
+  /* --- 11. drafts are per conversation and survive leaving ----------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-ta').length === 1, 'composer textarea is rendered');
+    byClass(tree, 'cd-ta')[0].props.onChange({ target: { value: '草稿 A' } });
+    tree = rerender();
+    assert(byClass(tree, 'cd-ta')[0].props.value === '草稿 A', 'draft typed in the first conversation');
+
+    click(byClass(tree, 'cd-item')[1]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-ta')[0].props.value === '', 'switching conversation does not carry the draft');
+    byClass(tree, 'cd-ta')[0].props.onChange({ target: { value: '草稿 B' } });
+    tree = rerender();
+
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-ta')[0].props.value === '草稿 A', 'the first draft comes back on return');
+
+    await wait(420);
+    unmount();
+    const reopened = mount(snapshot(session));
+    const tree2 = renderPanel(reopened);
+    click(byClass(tree2, 'cd-item')[0]);
+    const tree3 = rerender();
+    assert(byClass(tree3, 'cd-ta')[0].props.value === '草稿 A', 'draft survives leaving and re-entering');
+    console.log('PASS 11: drafts are stored per conversation');
+  }
+
+  /* --- 12. search filters by title and message body ------------------------ */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    assert(byClass(tree, 'cd-filter-input').length === 1, 'search input is rendered');
+    byClass(tree, 'cd-filter-input')[0].props.onChange({ target: { value: '灵隐寺' } });
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 1, 'a body-only hit filters to one row');
+    assert(itemTitles(tree)[0] === '杭州两天一夜怎么安排', 'the matching conversation is listed');
+
+    byClass(tree, 'cd-filter-input')[0].props.onChange({ target: { value: '没有这个关键词' } });
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 0, 'no rows for a miss');
+    assert(byClass(tree, 'cd-list-empty').length === 1, 'the empty state is shown');
+    assert(
+      textOf(byClass(tree, 'cd-list-empty')[0]).trim() === '没有匹配的对话',
+      'the empty state uses the search copy',
+    );
+
+    click(byClass(tree, 'cd-filter-clear')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 5, 'clearing the query restores every conversation');
+    console.log('PASS 12: conversation search filters the list');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 

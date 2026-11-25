@@ -14,6 +14,9 @@ window.__ModuleLoader__.load({
     const API = '/chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
+    const STORE_DRAFTS = 'deepseek-chat-ui.drafts.v1';
+    /** 新建对话视图在草稿表里的键；真实会话用各自的 id。 */
+    const DRAFT_NEW = '__new__';
     const STORE_PREFS = 'deepseek-chat-ui.prefs.v1';
     const STORE_EXPORT_DIR = 'deepseek-chat-ui.export-dir.v1';
     const STORE_THEME_PREF = 'deepseek-chat-ui.theme-pref.v1';
@@ -116,6 +119,9 @@ window.__ModuleLoader__.load({
       'search.running': '正在搜索网页…',
       'search.failed': '联网搜索暂不可用',
       'search.count': '已阅读 {count} 个网页',
+      'search.placeholder': '搜索对话',
+      'search.clear': '清除',
+      'search.empty': '没有匹配的对话',
       'group.pinned': '置顶',
       'menu.open': '更多操作',
       'menu.rename': '重命名',
@@ -230,6 +236,9 @@ window.__ModuleLoader__.load({
       'search.running': 'Searching the web…',
       'search.failed': 'Web search is unavailable',
       'search.count': 'Read {count} web pages',
+      'search.placeholder': 'Search conversations',
+      'search.clear': 'Clear',
+      'search.empty': 'No matching conversations',
       'group.pinned': 'Pinned',
       'menu.open': 'More actions',
       'menu.rename': 'Rename',
@@ -408,6 +417,10 @@ window.__ModuleLoader__.load({
         ['path', { d: 'M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6' }],
       ],
       x: [['path', { d: 'M6.5 6.5l11 11M17.5 6.5l-11 11' }]],
+      search: [
+        ['circle', { cx: 11, cy: 11, r: 6.2 }],
+        ['path', { d: 'M15.6 15.6L20 20' }],
+      ],
       chevronLeft: [['path', { d: 'M14.5 6l-6 6 6 6' }]],
       chevronDown: [['path', { d: 'M6 9.5l6 6 6-6' }]],
       volume: [
@@ -661,6 +674,23 @@ window.__ModuleLoader__.load({
         /* a corrupt store falls back to the seed */
       }
       return { threads: threads, activeId: activeId, prefs: loadPrefs() };
+    }
+
+    /** 每条对话各存一份草稿；新建对话视图用 DRAFT_NEW 作键。 */
+    function loadDrafts() {
+      const out = {};
+      try {
+        const raw = window.localStorage.getItem(STORE_DRAFTS);
+        const stored = raw ? JSON.parse(raw) : null;
+        if (stored !== null && typeof stored === 'object') {
+          Object.keys(stored).forEach(function (key) {
+            if (typeof stored[key] === 'string' && stored[key] !== '') out[key] = stored[key];
+          });
+        }
+      } catch (error) {
+        /* a corrupt store starts empty */
+      }
+      return out;
     }
 
     /** Accept our own export shape (or a bare array) and rebuild safe threads. */
@@ -1684,11 +1714,26 @@ window.__ModuleLoader__.load({
 
     function Sider(props) {
       const t = props.t;
+      const [query, setQuery] = useState('');
+      const needle = query.trim().toLowerCase();
+      /** 搜索命中标题或任意一条消息的正文；空查询直接返回全部。 */
+      const visibleThreads = useMemo(
+        function () {
+          if (needle === '') return props.threads;
+          return props.threads.filter(function (thread) {
+            if (thread.title.toLowerCase().indexOf(needle) >= 0) return true;
+            return thread.messages.some(function (message) {
+              return typeof message.text === 'string' && message.text.toLowerCase().indexOf(needle) >= 0;
+            });
+          });
+        },
+        [props.threads, needle],
+      );
       const groups = useMemo(
         function () {
-          return groupThreads(props.threads, t);
+          return groupThreads(visibleThreads, t);
         },
-        [props.threads, t],
+        [visibleThreads, t],
       );
       const [menu, setMenu] = useState(null);
       const menuRef = useRef(null);
@@ -1858,6 +1903,41 @@ window.__ModuleLoader__.load({
             ),
         h(
           'div',
+          { className: 'cd-filter' },
+          h(Icon, { name: 'search', size: 15 }),
+          h('input', {
+            className: 'cd-filter-input',
+            type: 'search',
+            value: query,
+            placeholder: t('search.placeholder'),
+            'aria-label': t('search.placeholder'),
+            onChange: function (event) {
+              setQuery(event.target.value);
+            },
+            onKeyDown: function (event) {
+              if (event.key !== 'Escape') return;
+              event.stopPropagation();
+              if (query !== '') setQuery('');
+            },
+          }),
+          query === ''
+            ? null
+            : h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'cd-filter-clear',
+                  title: t('search.clear'),
+                  'aria-label': t('search.clear'),
+                  onClick: function () {
+                    setQuery('');
+                  },
+                },
+                h(Icon, { name: 'x', size: 13 }),
+              ),
+        ),
+        h(
+          'div',
           { className: 'cd-listwrap' },
           h(
             'div',
@@ -1867,7 +1947,13 @@ window.__ModuleLoader__.load({
                 if (menu !== null) setMenu(null);
               },
             },
-            groups.length === 0 ? h('div', { className: 'cd-list-empty' }, t('list.empty')) : null,
+            groups.length === 0
+              ? h(
+                  'div',
+                  { className: 'cd-list-empty' },
+                  needle === '' ? t('list.empty') : t('search.empty'),
+                )
+              : null,
             groups.map(function (group) {
               return h(
                 'div',
@@ -2347,11 +2433,15 @@ window.__ModuleLoader__.load({
       const localeService = getLocale ? getLocale() : null;
       const wide = useMedia('(min-width: 768px)');
       const initial = useRef(null);
-      if (initial.current === null) initial.current = Object.assign(loadState(), { tts: loadTts() });
+      if (initial.current === null) {
+        initial.current = Object.assign(loadState(), { tts: loadTts(), drafts: loadDrafts() });
+      }
 
       const [threads, setThreads] = useState(initial.current.threads);
       const [activeId, setActiveId] = useState(initial.current.activeId);
-      const [draft, setDraft] = useState('');
+      const [drafts, setDrafts] = useState(function () {
+        return initial.current.drafts;
+      });
       const [localeId, setLocaleId] = useState(function () {
         return readLocaleId(localeService);
       });
@@ -2411,6 +2501,45 @@ window.__ModuleLoader__.load({
           /* a full quota must not break the conversation */
         }
       }, []);
+
+      /** 草稿单独存：输入框按会话隔离，切换对话既不串也不丢。 */
+      const latestDraftsRef = useRef(initial.current.drafts);
+      latestDraftsRef.current = drafts;
+      const saveDraftsNow = useCallback(function (map) {
+        try {
+          const clean = {};
+          Object.keys(map).forEach(function (key) {
+            if (typeof map[key] === 'string' && map[key] !== '') clean[key] = map[key];
+          });
+          if (Object.keys(clean).length === 0) window.localStorage.removeItem(STORE_DRAFTS);
+          else window.localStorage.setItem(STORE_DRAFTS, JSON.stringify(clean));
+        } catch (error) {
+          /* a full quota must not break typing */
+        }
+      }, []);
+
+      const draftKey = activeId === null ? DRAFT_NEW : activeId;
+      const draft = drafts[draftKey] === undefined ? '' : drafts[draftKey];
+      const setDraftFor = useCallback(function (key, value) {
+        setDrafts(function (previous) {
+          const currentValue = previous[key] === undefined ? '' : previous[key];
+          const nextValue = typeof value === 'function' ? value(currentValue) : value;
+          if (nextValue === currentValue) return previous;
+          const next = Object.assign({}, previous);
+          if (nextValue === '') delete next[key];
+          else next[key] = nextValue;
+          return next;
+        });
+      }, []);
+      /** 输入框默认写当前会话；异步回调（如转写）也总能落到最新会话上。 */
+      const draftKeyRef = useRef(draftKey);
+      draftKeyRef.current = draftKey;
+      const setDraft = useCallback(
+        function (value) {
+          setDraftFor(draftKeyRef.current, value);
+        },
+        [setDraftFor],
+      );
 
       const dict = localeId === 'en' ? en : zh;
       const t = useCallback(
@@ -2503,6 +2632,19 @@ window.__ModuleLoader__.load({
         [threads, activeId, saveNow],
       );
 
+      /** 草稿变化也做短防抖：打字不落盘，停手 300 ms 后一次写入。 */
+      useEffect(
+        function () {
+          const timer = setTimeout(function () {
+            saveDraftsNow(latestDraftsRef.current);
+          }, 300);
+          return function () {
+            clearTimeout(timer);
+          };
+        },
+        [drafts, saveDraftsNow],
+      );
+
       /**
        * 切换面板会卸载本页，而上面的清理函数会取消待写的防抖任务，导致刚删除 /
        * 置顶 / 改名的对话在重新进入时“复活”。卸载前补写一次快照；App 关闭
@@ -2516,6 +2658,7 @@ window.__ModuleLoader__.load({
               saveTimerRef.current = null;
             }
             saveNow(latestSaveRef.current.threads, latestSaveRef.current.activeId);
+            saveDraftsNow(latestDraftsRef.current);
           };
           window.addEventListener('pagehide', flush);
           return function () {
@@ -2523,7 +2666,7 @@ window.__ModuleLoader__.load({
             flush();
           };
         },
-        [saveNow],
+        [saveNow, saveDraftsNow],
       );
 
       useEffect(
@@ -2918,11 +3061,11 @@ window.__ModuleLoader__.load({
             });
           });
           setActiveId(targetId);
-          setDraft('');
+          setDraftFor(activeId === null ? DRAFT_NEW : activeId, '');
           setAttachments([]);
           runAssistant(targetId, history, newId('a'), thinking, search);
         },
-        [draft, attachments, pending, activeId, threads, runAssistant, t, thinking, search],
+        [draft, attachments, pending, activeId, threads, runAssistant, t, thinking, search, setDraftFor],
       );
 
       const regenerate = useCallback(
@@ -3089,7 +3232,7 @@ window.__ModuleLoader__.load({
         if (abortRef.current) abortRef.current.abort();
         setPending(false);
         setActiveId(null);
-        setDraft('');
+        setDraftFor(DRAFT_NEW, '');
         setAttachments([]);
         closeDrawer();
         setTimeout(function () {
@@ -3118,6 +3261,15 @@ window.__ModuleLoader__.load({
           setThreads(next);
           setActiveId(nextActive);
           saveNow(next, nextActive);
+          setDrafts(function (previous) {
+            let removed = false;
+            const kept = {};
+            Object.keys(previous).forEach(function (key) {
+              if (ids.indexOf(key) >= 0) removed = true;
+              else kept[key] = previous[key];
+            });
+            return removed ? kept : previous;
+          });
         },
         [threads, activeId, saveNow],
       );
@@ -3335,9 +3487,11 @@ window.__ModuleLoader__.load({
           setPending(false);
           setThreads([]);
           setActiveId(null);
+          setDrafts({});
           saveNow([], null);
+          saveDraftsNow({});
         },
-        [saveNow],
+        [saveNow, saveDraftsNow],
       );
 
       const collapsed = !wide || !sidebarOpen;
@@ -3765,6 +3919,13 @@ window.__ModuleLoader__.load({
 .cd-newchat:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
 [data-ds-dark-theme] .cd-newchat{border:none;box-shadow:inset 0 1px 1px rgba(255,255,255,.1),0 2px 4px rgba(106,111,117,.08)}
 .cd-newchat-icon{display:flex;margin-right:6px}
+.cd-filter{display:flex;flex-shrink:0;align-items:center;gap:6px;height:34px;margin-top:10px;padding:0 8px 0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary)}
+.cd-filter:focus-within{border-color:var(--dsw-alias-brand-primary)}
+.cd-filter-input{flex:1;min-width:0;height:100%;padding:0;border:none;outline:none;background:transparent;color:var(--dsw-alias-label-primary);font:13px/20px var(--dsw-font-family)}
+.cd-filter-input::placeholder{color:var(--dsw-alias-label-caption)}
+.cd-filter-input::-webkit-search-cancel-button{display:none}
+.cd-filter-clear{display:flex;flex-shrink:0;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.cd-filter-clear:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .cd-listwrap{position:relative;flex:1;min-height:0;margin-top:24px}
 .cd-list{height:100%;margin:0 -2px;padding:0 2px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
 .cd-section{position:relative;margin-top:16px;padding-top:4px}
@@ -3811,6 +3972,8 @@ window.__ModuleLoader__.load({
 .cd-settings-label{overflow:hidden;margin-left:4px;color:var(--dsw-alias-label-primary);font-size:14px;white-space:nowrap;text-overflow:ellipsis}
 
 .cd-sider-mobile .cd-listwrap{margin-top:16px}
+.cd-sider-mobile .cd-filter{height:38px;margin-top:14px}
+.cd-sider-mobile .cd-filter-input{font-size:15px}
 .cd-sider-mobile .cd-section-header{padding:4px 10px 3px;font-size:14px;line-height:22px}
 .cd-sider-mobile .cd-item{height:44px;padding:11px 6px 11px 12px;border-radius:16px;font-size:16px}
 .cd-sider-mobile .cd-item-title{line-height:22px}

@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.1.0
+
+### 中文
+
+- 新增会话搜索：按标题与消息全文过滤，命中为空时提示「没有匹配的对话」，Esc 或清除按钮恢复全部
+- 草稿按会话隔离：切换对话不再把半句话带过去，切走面板再回来草稿仍在（`deepseek-chat-ui.drafts.v1`）
+- 删除会话或「删除所有对话」时同步清理对应草稿
+- README 截图更新，补上搜索入口
+
+### English
+
+- Added conversation search: filters titles and message bodies, shows "No matching conversations" when nothing hits, and Esc or the clear button restores the full list
+- Drafts are now stored per conversation: switching conversations no longer carries text over, and a draft survives leaving the panel (`deepseek-chat-ui.drafts.v1`)
+- Deleting a conversation (or all conversations) removes its draft too
+- Refreshed the README screenshots to show the search field
+
 ## 1.0.1
 
 ### 中文
