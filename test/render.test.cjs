@@ -505,8 +505,8 @@ async function main() {
     assert(byClass(tree, 'cd-session-menu').length === 1, 'menu opens');
     const labels = menuItems(tree).map((node) => textOf(node).trim());
     assert(
-      JSON.stringify(labels) === JSON.stringify(['重命名', '置顶', '多选', '删除']),
-      'menu labels are 重命名/置顶/多选/删除, got ' + JSON.stringify(labels),
+      JSON.stringify(labels) === JSON.stringify(['重命名', '置顶', '多选', '导出', '删除']),
+      'menu labels are 重命名/置顶/多选/导出/删除, got ' + JSON.stringify(labels),
     );
     assert(byClass(tree, 'cd-session-menu-danger').length === 1, 'delete row is the danger row');
     assert(byClass(tree, 'cd-session-menu-sep').length === 1, 'delete sits after a separator');
@@ -650,7 +650,7 @@ async function main() {
     let tree = renderPanel(session);
     click(byClass(tree, 'cd-item-menu')[0]);
     tree = rerender();
-    click(menuItems(tree)[3]);
+    click(menuItems(tree)[4]);
     tree = rerender();
     assert(byClass(tree, 'cd-delete-confirm').length === 1, 'delete confirmation opens');
     assert(
@@ -696,7 +696,7 @@ async function main() {
     const victim = itemTitles(tree)[0];
     click(byClass(tree, 'cd-item-menu')[0]);
     tree = rerender();
-    click(menuItems(tree)[3]);
+    click(menuItems(tree)[4]);
     tree = rerender();
     click(byClass(tree, 'cd-confirm-pill-danger')[0]);
     tree = rerender();
@@ -801,7 +801,7 @@ async function main() {
     click(byClass(tree, 'cd-item-menu')[0]);
     tree = rerender();
     let items = byClass(tree, 'cd-session-menu-item');
-    assert(items.length === 4, 'the menu has four items');
+    assert(items.length === 5, 'the menu has five items');
     assert(items[0].dom.focused === true, 'the first item takes focus when the menu opens');
     const menu = byClass(tree, 'cd-session-menu')[0];
     const key = (name) => menu.props.onKeyDown({ key: name, preventDefault() {}, stopPropagation() {} });
@@ -813,7 +813,7 @@ async function main() {
     assert(items[0].dom.focused === true, 'ArrowUp moves back');
     key('End');
     items = byClass(tree, 'cd-session-menu-item');
-    assert(items[3].dom.focused === true, 'End jumps to the last item');
+    assert(items[4].dom.focused === true, 'End jumps to the last item');
     key('Home');
     items = byClass(tree, 'cd-session-menu-item');
     assert(items[0].dom.focused === true, 'Home jumps to the first item');
@@ -948,6 +948,46 @@ async function main() {
       'the status reports the skipped duplicate: ' + (status ? textOf(status) : 'none'),
     );
     console.log('PASS 19: importing skips duplicates');
+  }
+
+  /* --- 20. messages show their local time ---------------------------------- */
+  {
+    const at = 1700000000000;
+    const session = mount({
+      'deepseek-chat-ui.threads.v1': JSON.stringify([
+        {
+          id: 't-clock',
+          title: '带时间戳的会话',
+          updatedAt: at,
+          messages: [
+            { id: 'm1', role: 'user', text: '你好', at: at },
+            { id: 'm2', role: 'assistant', text: '你好呀', at: at + 60000 },
+          ],
+        },
+      ]),
+    });
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    const clock = byClass(tree, 'cd-time');
+    assert(clock.length === 2, 'both messages render a time label');
+    const date = new Date(at);
+    const expected = String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+    assert(textOf(clock[0]).trim() === expected, 'the label is the local HH:MM of the message: ' + textOf(clock[0]));
+    console.log('PASS 20: messages show their local time');
+  }
+
+  /* --- 21. one conversation can be exported from its menu ------------------ */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[3]);
+    await wait(60);
+    tree = rerender();
+    assert(byClass(tree, 'cd-toast').length === 1, 'single export reports through the toast');
+    console.log('PASS 21: a single conversation exports from its menu');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

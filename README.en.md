@@ -29,6 +29,7 @@ Light theme:
 - Conversation search filters titles and message bodies; Esc or the clear button in the field restores the full list
 - Drafts are stored per conversation: half a sentence typed in A never shows up in B, and it survives leaving the panel
 - Keyboard support: arrow keys / Home / End navigate the menu, F2 renames and Delete deletes a focused conversation, and Tab stays inside dialogs with focus restored on close
+- Every message carries its local time (`HH:MM`), shown with the action buttons on hover or on touch
 - Message bubbles, welcome screen, composer, Markdown (headings / lists / inline code / code blocks) and a collapsible "Thought" block
 - Upload text files, voice input, send / stop on the right of the composer
 - "Deep thinking" maps to the model's reasoningEffort (on = max, off = off; levels come from the model declaration)
@@ -48,6 +49,7 @@ The "⋯" on the right of every conversation opens:
 | Rename | Dialog to edit the title: Enter saves, Esc cancels; the title is stored in localStorage and survives export / import |
 | Pin | Pinned conversations form their own group above all date groups, most recently pinned first; pinned rows offer "Unpin" |
 | Select | Enters multi-select: every row becomes a checkbox and clicking toggles it; the toolbar offers select-all / clear-all (over the current filter), bulk pin, bulk export and bulk delete, and Escape leaves |
+| Export | Writes this one conversation as JSON to the export folder and reports the result in the toast |
 | Delete | Two-step confirmation; the conversation is removed from the list and localStorage and cannot be recovered |
 
 The delete confirmation is intentionally fixed in wording and styling:
@@ -126,6 +128,16 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 | `cordis.patch.yml` | Bundle patch, read by the Plugin Manager at install time |
 | `locale/zh.json`, `locale/en.json` | Name and description shown in the Plugin Manager |
 | `icon.svg` | Plugin icon |
+
+## Architecture
+
+![Architecture](media/architecture.svg)
+
+- The browser half (`client.js`) owns rendering: conversation list, menu, search, dialogs
+- Conversations, drafts and preferences live in the browser's `localStorage` and are not uploaded by default
+- The host half (`index.js`) serves `/chat-replica/*` routes and only calls services DSH already composed
+  (`llm.stream` / `web.search` / `speechToText` / `agentDefaultModel` / `uiWorkspace`)
+- Read-aloud requests are proxied by the Host with the key from your profile to `api.deepseek.com`
 
 ## How it works
 

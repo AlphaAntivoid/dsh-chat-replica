@@ -134,6 +134,7 @@ window.__ModuleLoader__.load({
       'menu.pin': '置顶',
       'menu.unpin': '取消置顶',
       'menu.multi': '多选',
+      'menu.export': '导出',
       'menu.delete': '删除',
       'rename.title': '重命名对话',
       'rename.field': '对话标题',
@@ -260,6 +261,7 @@ window.__ModuleLoader__.load({
       'menu.pin': 'Pin to top',
       'menu.unpin': 'Unpin',
       'menu.multi': 'Select',
+      'menu.export': 'Export',
       'menu.delete': 'Delete',
       'rename.title': 'Rename conversation',
       'rename.field': 'Conversation title',
@@ -591,6 +593,14 @@ window.__ModuleLoader__.load({
       return date.getTime();
     }
 
+    /** 消息时间戳渲染成 HH:MM；缺失或非法时不显示。 */
+    function formatClock(value) {
+      if (typeof value !== 'number') return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+    }
+
     function groupThreads(threads, t) {
       const today = startOfDay(Date.now());
       const pinned = threads
@@ -739,6 +749,7 @@ window.__ModuleLoader__.load({
             id: newId('m'),
             role: message.role,
             text: message.text,
+            ...(typeof message.at === 'number' ? { at: message.at } : {}),
             ...(files.length > 0 ? { files: files } : {}),
           });
         }
@@ -776,6 +787,7 @@ window.__ModuleLoader__.load({
           return {
             role: message.role,
             text: message.text,
+            ...(typeof message.at === 'number' ? { at: message.at } : {}),
             ...(message.files && message.files.length > 0 ? { files: message.files } : {}),
           };
         }),
@@ -1792,7 +1804,7 @@ window.__ModuleLoader__.load({
         visibleIds.every(function (id) {
           return isChecked(id);
         });
-      const menuItemRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
+      const menuItemRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
       const menuFocusRef = useRef(0);
 
       /** 菜单在页面根节点内绝对定位，因此能越过列表的滚动裁剪；点外部、Esc、缩放和滚动都会收起。 */
@@ -1870,7 +1882,7 @@ window.__ModuleLoader__.load({
           ? page.getBoundingClientRect()
           : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
         const width = 176;
-        const height = 178;
+        const height = 204;
         const up = base.top + base.height - rect.bottom < height + 8;
         const left = Math.max(8, Math.min(rect.right - base.left - width, base.width - width - 8));
         const rawTop = up ? rect.top - base.top - height - 6 : rect.bottom - base.top + 6;
@@ -2196,13 +2208,27 @@ window.__ModuleLoader__.load({
                 h(Icon, { name: 'checkSquare', size: 16 }),
                 h('span', null, t('menu.multi')),
               ),
-              h('div', { className: 'cd-session-menu-sep', role: 'separator' }),
               h(
                 'button',
                 {
                   type: 'button',
                   role: 'menuitem',
                   ref: menuItemRefs[3],
+                  className: 'cd-session-menu-item',
+                  onClick: function () {
+                    run(props.onExportOne);
+                  },
+                },
+                h(Icon, { name: 'download', size: 16 }),
+                h('span', null, t('menu.export')),
+              ),
+              h('div', { className: 'cd-session-menu-sep', role: 'separator' }),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  role: 'menuitem',
+                  ref: menuItemRefs[4],
                   className: 'cd-session-menu-item cd-session-menu-danger',
                   onClick: function () {
                     run(props.onDelete);
@@ -3076,7 +3102,7 @@ window.__ModuleLoader__.load({
               if (thread.id !== threadId) return thread;
               return Object.assign({}, thread, {
                 updatedAt: Date.now(),
-                messages: thread.messages.concat({ id: assistantId, role: 'assistant', text: '', reasoning: '' }),
+                messages: thread.messages.concat({ id: assistantId, role: 'assistant', text: '', reasoning: '', at: Date.now() }),
               });
             });
           });
@@ -3206,6 +3232,7 @@ window.__ModuleLoader__.load({
             id: newId('u'),
             role: 'user',
             text: text,
+            at: stamp,
             ...(files.length > 0 ? { files: files } : {}),
           };
           const existing = threads.find(function (thread) {
@@ -3632,6 +3659,19 @@ window.__ModuleLoader__.load({
         [threads, selectedIds, exportDir, exportConversations, showToast],
       );
 
+      /** 单条导出：从会话菜单里导出这一条。 */
+      const exportThreadById = useCallback(
+        async function (id) {
+          const thread = threads.find(function (item) {
+            return item.id === id;
+          });
+          if (!thread) return;
+          const result = await exportConversations(exportDir, [thread]);
+          showToast(result.text);
+        },
+        [threads, exportDir, exportConversations, showToast],
+      );
+
       const listDirectory = useCallback(
         async function (path) {
           const workspace = props.getWorkspace ? props.getWorkspace() : null;
@@ -3729,9 +3769,11 @@ window.__ModuleLoader__.load({
       const hasMessages = !!activeThread && activeThread.messages.length > 0;
 
       const renderActions = function (message, extra) {
+        const clock = formatClock(message.at);
         return h(
           'div',
           { className: 'cd-actions' },
+          clock === '' ? null : h('span', { className: 'cd-time' }, clock),
           message.role === 'assistant' && message.text
             ? h(
                 'button',
@@ -3925,6 +3967,9 @@ window.__ModuleLoader__.load({
         },
         onDelete: function (thread) {
           requestDelete([thread.id]);
+        },
+        onExportOne: function (thread) {
+          exportThreadById(thread.id);
         },
         selecting: selecting,
         selected: selectedIds,
@@ -4243,6 +4288,7 @@ window.__ModuleLoader__.load({
 .cd-assistant .cd-actions{padding-top:12px;padding-bottom:4px}
 @media (hover:hover){.cd-actions{opacity:0;transition:opacity .15s}.cd-user:hover .cd-actions,.cd-assistant:hover .cd-actions{opacity:1}}
 .cd-act{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;transition:background-color .15s,color .15s}
+.cd-time{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;letter-spacing:.02em;user-select:none}
 .cd-act:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .cd-act:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
 .cd-waiting{display:flex;align-items:center;gap:6px;height:34px}

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="470" viewBox="0 0 900 470" role="img" aria-label="Architecture: the browser half renders the panel and stores conversations in localStorage; the host half serves chat-replica routes over DSH services">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#8a94a6"/>
+    </marker>
+  </defs>
+
+  <rect width="900" height="470" rx="18" fill="#ffffff"/>
+
+  <text x="32" y="46" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="15" font-weight="600" fill="#1f3a68">Browser · client.js</text>
+  <text x="484" y="46" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="15" font-weight="600" fill="#1f4d2b">Host · index.js</text>
+
+  <rect x="24" y="64" width="400" height="340" rx="14" fill="#f5f8ff" stroke="#d7e3f8"/>
+  <rect x="476" y="64" width="400" height="340" rx="14" fill="#f4faf5" stroke="#d5e8d8"/>
+
+  <rect x="48" y="92" width="352" height="100" rx="10" fill="#ffffff" stroke="#c9d8f3"/>
+  <text x="64" y="122" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="13" font-weight="600" fill="#1f2a3a">ChatReplica · Sider · Dialogs</text>
+  <text x="64" y="146" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#5b6b85">会话列表 / 菜单 / 搜索 / 草稿 / 设置</text>
+  <text x="64" y="168" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#5b6b85">注册到 main + sidebar.panellist 槽位</text>
+
+  <line x1="224" y1="192" x2="224" y2="252" stroke="#8a94a6" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="236" y="226" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="11" fill="#5b6b85">read / write</text>
+
+  <rect x="48" y="252" width="352" height="104" rx="10" fill="#ffffff" stroke="#e2d8c2"/>
+  <text x="64" y="280" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="13" font-weight="600" fill="#1f2a3a">localStorage</text>
+  <text x="64" y="304" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#5b6b85">threads.v1 · drafts.v1 · prefs.v1 · tts.v1</text>
+  <text x="64" y="326" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#5b6b85">export-dir.v1 · theme-pref.v1</text>
+
+  <line x1="424" y1="150" x2="476" y2="150" stroke="#8a94a6" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="450" y="138" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="11" fill="#5b6b85">fetch</text>
+  <text x="450" y="170" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="11" fill="#5b6b85">NDJSON</text>
+
+  <rect x="500" y="92" width="352" height="100" rx="10" fill="#ffffff" stroke="#c9e3cf"/>
+  <text x="516" y="120" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="13" font-weight="600" fill="#1f2a3a">HTTP 路由 /chat-replica/*</text>
+  <text x="516" y="144" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#5b6b85">/chat · /transcribe · /tts</text>
+  <text x="516" y="166" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#5b6b85">/export · /system-theme</text>
+
+  <line x1="676" y1="192" x2="676" y2="204" stroke="#8a94a6" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="500" y="204" width="352" height="96" rx="10" fill="#ffffff" stroke="#c9e3cf"/>
+  <text x="516" y="232" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="13" font-weight="600" fill="#1f2a3a">DSH 服务（ctx.*）</text>
+  <text x="516" y="256" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#5b6b85">llm.stream · web.search · speechToText</text>
+  <text x="516" y="278" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#5b6b85">agentDefaultModel · uiWorkspace</text>
+
+  <line x1="676" y1="300" x2="676" y2="316" stroke="#8a94a6" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="500" y="316" width="352" height="64" rx="10" fill="#fdf7ef" stroke="#e6d5bd" stroke-dasharray="4 3"/>
+  <text x="516" y="342" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="13" font-weight="600" fill="#1f2a3a">api.deepseek.com · TTS</text>
+  <text x="516" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#5b6b85">Host 用 profile 里的 key 代发</text>
+
+  <text x="24" y="440" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#6b7280">模型、语音识别与朗读都由 Host 发起；会话内容默认只留在浏览器 localStorage。</text>
+</svg>

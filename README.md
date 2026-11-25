@@ -28,6 +28,7 @@
 - 会话搜索：按标题与消息全文过滤；Esc 或输入框里的清除按钮恢复全部
 - 草稿按会话隔离：在 A 里打半句去 B 不会串，切走面板再回来也还在
 - 键盘可用：菜单方向键 / Home / End 导航，行上 F2 重命名、Delete 删除，对话框内 Tab 循环且关闭后焦点还原
+- 每条消息带本地时间（`HH:MM`），悬停或触屏时与操作按钮一起显示
 - 消息气泡、欢迎语、输入框，Markdown（标题 / 列表 / 行内代码 / 代码块）与「已思考」折叠块
 - 输入框右侧：📎 上传文本文件、🎤 语音输入、发送 / 停止
 - 「深度思考」映射到模型的 reasoningEffort（开 = max，关 = off，档位取自模型声明）
@@ -47,6 +48,7 @@
 | 重命名 | 弹窗改标题：回车保存、Esc 取消；标题写回 localStorage，导出 / 导入也会保留 |
 | 置顶 | 单独成组排在所有日期分组之前（按置顶时间倒序）；已置顶的行显示「取消置顶」 |
 | 多选 | 进入多选：每行变成复选框，点行切换选择；工具条可全选 / 取消全选（按当前筛选结果）、批量置顶、批量导出、批量删除，Esc 退出 |
+| 导出 | 把这一条会话写成 JSON 到「导出位置」，结果显示为提示条 |
 | 删除 | 二次确认；确认后从列表和 localStorage 移除，不可恢复 |
 
 删除确认的文案与样式固定：
@@ -120,6 +122,16 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
 | `cordis.patch.yml` | bundle 补丁（安装时由 Plugin Manager 读取） |
 | `locale/zh.json`、`locale/en.json` | Plugin Manager 里显示的名称与描述 |
 | `icon.svg` | 插件图标 |
+
+## 架构
+
+![架构图](media/architecture.svg)
+
+- 浏览器半边（`client.js`）负责全部渲染：会话列表、菜单、搜索、对话框
+- 会话、草稿、偏好都存在浏览器 `localStorage`，默认不上传
+- Host 半边（`index.js`）提供 `/chat-replica/*` 路由，内部只调用 DSH 已装配的服务
+  （`llm.stream` / `web.search` / `speechToText` / `agentDefaultModel` / `uiWorkspace`）
+- 朗读请求由 Host 用 profile 里的密钥代发到 `api.deepseek.com`
 
 ## 数据流
 

@@ -3,6 +3,20 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.4.0
+
+### 中文
+
+- 消息显示本地时间（`HH:MM`），与复制 / 朗读按钮一起出现，导入导出也保留时间戳
+- 会话菜单新增「导出」：把单条会话写成 JSON 存到「导出位置」
+- README 增加架构图（浏览器 / Host 两侧与数据流），并更新截图（菜单包含导出项）
+
+### English
+
+- Messages show their local time (`HH:MM`) next to the copy / read-aloud actions, and timestamps survive import and export
+- The conversation menu gains "Export", which writes just that conversation as JSON into the export folder
+- Added an architecture diagram (browser and host halves with the data flow) and refreshed the screenshots to include the export row
+
 ## 1.3.0
 
 ### 中文
