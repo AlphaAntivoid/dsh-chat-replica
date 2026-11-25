@@ -39,6 +39,7 @@
 - 每条消息带本地时间（`HH:MM`），悬停或触屏时与操作按钮一起显示
 - 任意一条回答可「分叉」：把会话复制到该回答为止生成新会话（标题带「· 分叉」），方便换个方向继续；分叉不继承置顶
 - 用户消息可「编辑」并重新生成：保存后截断到该条、丢弃之后的内容（Ctrl/Cmd+Enter 保存，Esc 取消）
+- 单条会话可导出为 **Markdown** 阅读稿；JSON 仍用于备份与再导入
 - 消息气泡、欢迎语、输入框，Markdown（标题 / 列表 / 行内代码 / 代码块）与「已思考」折叠块
 - 输入框右侧：📎 上传文本文件、🎤 语音输入、发送 / 停止
 - 「深度思考」映射到模型的 reasoningEffort（开 = max，关 = off，档位取自模型声明）
@@ -59,7 +60,8 @@
 | 重命名 | 弹窗改标题：回车保存、Esc 取消；标题写回 localStorage，导出 / 导入也会保留 |
 | 置顶 | 单独成组排在所有日期分组之前（按置顶时间倒序）；已置顶的行显示「取消置顶」 |
 | 多选 | 进入多选：每行变成复选框，点行切换选择；工具条可全选 / 取消全选（按当前筛选结果）、批量置顶、批量导出、批量删除，Esc 退出 |
-| 导出 | 把这一条会话写成 JSON 到「导出位置」，结果显示为提示条 |
+| 导出 JSON | 把这一条会话写成 JSON（备份，可再导入），结果显示为提示条 |
+| 导出 Markdown | 把这一条会话写成 `.md` 阅读稿：标题、时间、用户 / 助手分段，存到「导出位置」 |
 | 删除 | 二次确认；确认后立即移除，并在**8 秒内**提供「撤销」，超时即永久删除 |
 
 删除确认的文案与样式固定：
@@ -163,8 +165,8 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
 6. 朗读与网页 demo 一致：`POST https://api.deepseek.com/v1/tools/tts`，
    `{text, voice_id: stella|tide, format: pcm, filter_markdown: true}`，返回 24 kHz 单声道 16 位 PCM；
    Host 用 profile 里的 `DEEPSEEK_API_KEY` 代发，页面按 `AudioContext(24000)` 排程播放。
-7. 导出走 `POST /chat-replica/export`（body 里带 `dir`）：Host 把 `{version, exportedAt, threads}`
-   写成 `<dir>/deepseek-chat-<本地时间>.json`。`dir` 留空表示交给 Host 选：优先用页面给的目录（必须已存在），
+7. 导出走 `POST /chat-replica/export`（body 里带 `dir` 与可选的 `format`）：Host 把会话写成
+   `<dir>/deepseek-chat-<本地时间>.json`（`format: 'markdown'` 时写 `.md` 阅读稿）。`dir` 留空表示交给 Host 选：优先用页面给的目录（必须已存在），
    其次是 Android 的 `/sdcard/Download`（仅在该路径存在时），再退到用户的 `Downloads` / `Download` /
    `Documents`（不存在会自动创建）；响应里的 `dir` 就是实际写入位置。
    JSON 响应统一带 `cache-control: no-store, no-transform`：carrier 的 gzip 重写会提前发送响应头，
@@ -189,6 +191,7 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
 - 本地存储写满时不会静默丢数据，会弹出「本地存储已满」提示
 - 面板渲染异常时只显示这一块的兜底页（带重试），不会整页白屏
 - 「删除」只有 8 秒撤销窗口（提示条上的「撤销」）；超时，或期间再次删除其他会话会覆盖撤销快照，之后不可恢复
+- Markdown 导出目前只支持单条会话；批量导出与导入仍使用 JSON
 
 ## 复刻来源
 

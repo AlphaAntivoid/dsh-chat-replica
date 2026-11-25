@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.10.2';
+    const PLUGIN_VERSION = '1.11.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -159,6 +159,8 @@ window.__ModuleLoader__.load({
       'menu.unpin': '取消置顶',
       'menu.multi': '多选',
       'menu.export': '导出',
+      'menu.exportJson': '导出 JSON',
+      'menu.exportMarkdown': '导出 Markdown',
       'menu.delete': '删除',
       'rename.title': '重命名对话',
       'rename.field': '对话标题',
@@ -305,6 +307,8 @@ window.__ModuleLoader__.load({
       'menu.unpin': 'Unpin',
       'menu.multi': 'Select',
       'menu.export': 'Export',
+      'menu.exportJson': 'Export JSON',
+      'menu.exportMarkdown': 'Export Markdown',
       'menu.delete': 'Delete',
       'rename.title': 'Rename conversation',
       'rename.field': 'Conversation title',
@@ -1962,7 +1966,7 @@ window.__ModuleLoader__.load({
         visibleIds.every(function (id) {
           return isChecked(id);
         });
-      const menuItemRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
+      const menuItemRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
       const menuFocusRef = useRef(0);
 
       /** 菜单在页面根节点内绝对定位，因此能越过列表的滚动裁剪；点外部、Esc、缩放和滚动都会收起。 */
@@ -2040,7 +2044,7 @@ window.__ModuleLoader__.load({
           ? page.getBoundingClientRect()
           : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
         const width = 176;
-        const height = 204;
+        const height = 236;
         const up = base.top + base.height - rect.bottom < height + 8;
         const left = Math.max(8, Math.min(rect.right - base.left - width, base.width - width - 8));
         const rawTop = up ? rect.top - base.top - height - 6 : rect.bottom - base.top + 6;
@@ -2383,7 +2387,21 @@ window.__ModuleLoader__.load({
                   },
                 },
                 h(Icon, { name: 'download', size: 16 }),
-                h('span', null, t('menu.export')),
+                h('span', null, t('menu.exportJson')),
+              ),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  role: 'menuitem',
+                  ref: menuItemRefs[4],
+                  className: 'cd-session-menu-item',
+                  onClick: function () {
+                    run(props.onExportMarkdown);
+                  },
+                },
+                h(Icon, { name: 'file', size: 16 }),
+                h('span', null, t('menu.exportMarkdown')),
               ),
               h('div', { className: 'cd-session-menu-sep', role: 'separator' }),
               h(
@@ -2391,7 +2409,7 @@ window.__ModuleLoader__.load({
                 {
                   type: 'button',
                   role: 'menuitem',
-                  ref: menuItemRefs[4],
+                  ref: menuItemRefs[5],
                   className: 'cd-session-menu-item cd-session-menu-danger',
                   onClick: function () {
                     run(props.onDelete);
@@ -3978,13 +3996,14 @@ window.__ModuleLoader__.load({
       );
 
       const exportConversations = useCallback(
-        async function (dir, list) {
+        async function (dir, list, format) {
           const source = Array.isArray(list) ? list : threads;
+          const wanted = format === 'markdown' ? 'markdown' : 'json';
           const attempt = async function () {
             const response = await fetch(`${API}/export`, {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ threads: source.map(exportThread), dir: dir }),
+              body: JSON.stringify({ threads: source.map(exportThread), dir: dir, format: wanted }),
             });
             const text = await response.text();
             let body = {};
@@ -4029,14 +4048,14 @@ window.__ModuleLoader__.load({
         [threads, selectedIds, exportDir, exportConversations, showToast],
       );
 
-      /** 单条导出：从会话菜单里导出这一条。 */
+      /** 单条导出：从会话菜单里导出这一条（JSON 备份或 Markdown 阅读稿）。 */
       const exportThreadById = useCallback(
-        async function (id) {
+        async function (id, format) {
           const thread = threads.find(function (item) {
             return item.id === id;
           });
           if (!thread) return;
-          const result = await exportConversations(exportDir, [thread]);
+          const result = await exportConversations(exportDir, [thread], format);
           showToast(result.text);
         },
         [threads, exportDir, exportConversations, showToast],
@@ -4376,7 +4395,10 @@ window.__ModuleLoader__.load({
           requestDelete([thread.id]);
         },
         onExportOne: function (thread) {
-          exportThreadById(thread.id);
+          exportThreadById(thread.id, 'json');
+        },
+        onExportMarkdown: function (thread) {
+          exportThreadById(thread.id, 'markdown');
         },
         selecting: selecting,
         selected: selectedIds,

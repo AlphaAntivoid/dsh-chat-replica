@@ -509,8 +509,8 @@ async function main() {
     assert(byClass(tree, 'cd-session-menu').length === 1, 'menu opens');
     const labels = menuItems(tree).map((node) => textOf(node).trim());
     assert(
-      JSON.stringify(labels) === JSON.stringify(['重命名', '置顶', '多选', '导出', '删除']),
-      'menu labels are 重命名/置顶/多选/导出/删除, got ' + JSON.stringify(labels),
+      JSON.stringify(labels) === JSON.stringify(['重命名', '置顶', '多选', '导出 JSON', '导出 Markdown', '删除']),
+      'menu labels are 重命名/置顶/多选/导出 JSON/导出 Markdown/删除, got ' + JSON.stringify(labels),
     );
     assert(byClass(tree, 'cd-session-menu-danger').length === 1, 'delete row is the danger row');
     assert(byClass(tree, 'cd-session-menu-sep').length === 1, 'delete sits after a separator');
@@ -654,7 +654,7 @@ async function main() {
     let tree = renderPanel(session);
     click(byClass(tree, 'cd-item-menu')[0]);
     tree = rerender();
-    click(menuItems(tree)[4]);
+    click(menuItems(tree)[5]);
     tree = rerender();
     assert(byClass(tree, 'cd-delete-confirm').length === 1, 'delete confirmation opens');
     assert(
@@ -704,7 +704,7 @@ async function main() {
     const victim = itemTitles(tree)[0];
     click(byClass(tree, 'cd-item-menu')[0]);
     tree = rerender();
-    click(menuItems(tree)[4]);
+    click(menuItems(tree)[5]);
     tree = rerender();
     click(byClass(tree, 'cd-confirm-pill-danger')[0]);
     tree = rerender();
@@ -809,7 +809,7 @@ async function main() {
     click(byClass(tree, 'cd-item-menu')[0]);
     tree = rerender();
     let items = byClass(tree, 'cd-session-menu-item');
-    assert(items.length === 5, 'the menu has five items');
+    assert(items.length === 6, 'the menu has six items');
     assert(items[0].dom.focused === true, 'the first item takes focus when the menu opens');
     const menu = byClass(tree, 'cd-session-menu')[0];
     const key = (name) => menu.props.onKeyDown({ key: name, preventDefault() {}, stopPropagation() {} });
@@ -821,7 +821,7 @@ async function main() {
     assert(items[0].dom.focused === true, 'ArrowUp moves back');
     key('End');
     items = byClass(tree, 'cd-session-menu-item');
-    assert(items[4].dom.focused === true, 'End jumps to the last item');
+    assert(items[5].dom.focused === true, 'End jumps to the last item');
     key('Home');
     items = byClass(tree, 'cd-session-menu-item');
     assert(items[0].dom.focused === true, 'Home jumps to the first item');
@@ -1004,7 +1004,7 @@ async function main() {
     let tree = renderPanel(session);
     click(byClass(tree, 'cd-item-menu')[0]);
     tree = rerender();
-    click(menuItems(tree)[4]);
+    click(menuItems(tree)[5]);
     tree = rerender();
     click(byClass(tree, 'cd-confirm-pill-danger')[0]);
     tree = rerender();
@@ -1135,6 +1135,19 @@ async function main() {
     assert(link.props.target === '_blank', 'the link opens in a new tab');
     assert(link.props.rel === 'noreferrer', 'the link sets rel=noreferrer');
     console.log('PASS 27: settings footer shows the version and repository link');
+  }
+
+  /* --- 28. one conversation exports as Markdown ---------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item-menu')[0]);
+    tree = rerender();
+    click(menuItems(tree)[4]);
+    await wait(60);
+    tree = rerender();
+    assert(byClass(tree, 'cd-toast').length === 1, 'markdown export reports through the toast');
+    console.log('PASS 28: a conversation exports as Markdown');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

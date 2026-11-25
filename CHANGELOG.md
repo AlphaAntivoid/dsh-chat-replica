@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.11.0
+
+### 中文
+
+- 新增 Markdown 导出：单条会话可写成 `.md` 阅读稿（标题、时间、用户 / 助手分段，含附件名），存到「导出位置」
+- 会话菜单的导出拆成「导出 JSON」（备份 / 可再导入）与「导出 Markdown」两项
+- Host 的 `/chat-replica/export` 接受 `format: 'markdown'`，文件名改用 `.md`；Host 端到端测试校验标题、分段与正文
+- 说明：批量导出与导入仍只支持 JSON
+
+### English
+
+- Added Markdown export: a single conversation becomes a `.md` reading copy (title, time, user / assistant sections, attachment names) in the export folder
+- The conversation menu now separates "Export JSON" (backup / re-importable) from "Export Markdown"
+- The Host `/chat-replica/export` route accepts `format: 'markdown'` and writes a `.md` file; the end-to-end Host test checks the title, sections and body
+- Note: bulk export and import still use JSON only
+
 ## 1.10.2
 
 ### 中文

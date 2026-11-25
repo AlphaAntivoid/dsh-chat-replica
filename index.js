@@ -578,6 +578,8 @@ async function exportConversations(req, res) {
   }
   const threads = Array.isArray(payload?.threads) ? payload.threads : null;
   if (threads === null) return sendJson(res, 400, { error: 'no-threads' });
+  const format = payload?.format === 'markdown' ? 'markdown' : 'json';
+  const sanitized = threads.map(sanitizeThread);
 
   const now = new Date();
   const pad = (value) => String(value).padStart(2, '0');
@@ -590,17 +592,20 @@ async function exportConversations(req, res) {
     pad(now.getSeconds()),
     String(now.getMilliseconds()).padStart(3, '0'),
   ].join('-');
-  const name = `deepseek-chat-${stamp}.json`;
-  const text = JSON.stringify(
-    {
-      version: 1,
-      source: 'dsh-chat-replica',
-      exportedAt: new Date().toISOString(),
-      threads: threads.map(sanitizeThread),
-    },
-    null,
-    2,
-  );
+  const name = `deepseek-chat-${stamp}.${format === 'markdown' ? 'md' : 'json'}`;
+  const text =
+    format === 'markdown'
+      ? markdownOf(sanitized, now)
+      : JSON.stringify(
+          {
+            version: 1,
+            source: 'dsh-chat-replica',
+            exportedAt: new Date().toISOString(),
+            threads: sanitized,
+          },
+          null,
+          2,
+        );
 
   const requested = typeof payload.dir === 'string' ? payload.dir.trim() : '';
   const candidates = exportCandidates(requested, isDirectory);
@@ -622,6 +627,48 @@ async function exportConversations(req, res) {
   const message = failures.join(' | ');
   logExport({ ok: false, requested, failures });
   sendJson(res, 500, { error: 'write-failed', message });
+}
+
+/** `YYYY-MM-DD HH:MM`, stable regardless of the Host locale. */
+function formatWhen(value) {
+  const date = new Date(typeof value === 'number' ? value : Date.now());
+  const pad = (part) => String(part).padStart(2, '0');
+  return (
+    date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+    ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes())
+  );
+}
+
+/**
+ * Render exported conversations as one readable Markdown document.
+ * A single conversation becomes `# title` with `## user/assistant` sections;
+ * several conversations nest one level deeper.
+ *
+ * @param threads - Sanitized threads (`title`, `updatedAt`, `pinnedAt`, `messages`).
+ * @param now - Export time, used in the multi-conversation header.
+ * @returns Markdown text ending with one newline.
+ */
+export function markdownOf(threads, now = new Date()) {
+  const multiple = threads.length > 1;
+  const lines = [];
+  if (multiple) {
+    lines.push('# 对话导出', '', '导出时间：' + formatWhen(now.getTime()), '');
+  }
+  threads.forEach((thread) => {
+    const heading = multiple ? '##' : '#';
+    const messageHeading = multiple ? '###' : '##';
+    lines.push(heading + ' ' + (thread.title || '未命名对话'), '');
+    const meta = '_' + formatWhen(thread.updatedAt) + (typeof thread.pinnedAt === 'number' ? ' · 置顶' : '') + '_';
+    lines.push(meta, '');
+    thread.messages.forEach((message) => {
+      lines.push(messageHeading + ' ' + (message.role === 'user' ? '用户' : '助手'), '');
+      if (message.files && message.files.length > 0) {
+        lines.push('（附件：' + message.files.map((file) => file.name).join('、') + '）', '');
+      }
+      if (message.text !== '') lines.push(message.text, '');
+    });
+  });
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
 }
 
 function sanitizeThread(thread) {

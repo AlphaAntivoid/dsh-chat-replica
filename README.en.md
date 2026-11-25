@@ -40,6 +40,7 @@ Light theme:
 - Every message carries its local time (`HH:MM`), shown with the action buttons on hover or on touch
 - Any answer can be forked: the conversation is copied up to that answer into a new one titled "· fork", so you can continue in another direction; pin state is not inherited
 - A user message can be edited and re-answered: saving truncates to that message and discards what follows (Ctrl/Cmd+Enter saves, Esc cancels)
+- A single conversation can be exported as a **Markdown** reading copy; JSON remains the backup and re-import format
 - Message bubbles, welcome screen, composer, Markdown (headings / lists / inline code / code blocks) and a collapsible "Thought" block
 - Upload text files, voice input, send / stop on the right of the composer
 - "Deep thinking" maps to the model's reasoningEffort (on = max, off = off; levels come from the model declaration)
@@ -60,7 +61,8 @@ The "⋯" on the right of every conversation opens:
 | Rename | Dialog to edit the title: Enter saves, Esc cancels; the title is stored in localStorage and survives export / import |
 | Pin | Pinned conversations form their own group above all date groups, most recently pinned first; pinned rows offer "Unpin" |
 | Select | Enters multi-select: every row becomes a checkbox and clicking toggles it; the toolbar offers select-all / clear-all (over the current filter), bulk pin, bulk export and bulk delete, and Escape leaves |
-| Export | Writes this one conversation as JSON to the export folder and reports the result in the toast |
+| Export JSON | Writes this conversation as JSON (a backup you can import again) and reports the result in the toast |
+| Export Markdown | Writes this conversation as a `.md` reading copy — title, time and user / assistant sections — into the export folder |
 | Delete | Two-step confirmation; the conversation is removed immediately and gets an **8-second** undo, after which it is permanent |
 
 The delete confirmation is intentionally fixed in wording and styling:
@@ -175,8 +177,9 @@ Restart DSH to take effect. To uninstall, remove that insert and the
    `{text, voice_id: stella|tide, format: pcm, filter_markdown: true}` returns 24 kHz mono 16-bit PCM; the Host
    proxies the call with the profile's `DEEPSEEK_API_KEY` and the page schedules playback through
    `AudioContext(24000)`.
-7. Export goes through `POST /chat-replica/export` (with `dir` in the body): the Host writes
-   `{version, exportedAt, threads}` to `<dir>/deepseek-chat-<local time>.json`. An empty `dir` lets the Host
+7. Export goes through `POST /chat-replica/export` (with `dir` and an optional `format` in the body): the Host
+   writes `{version, exportedAt, threads}` to `<dir>/deepseek-chat-<local time>.json` (`format: 'markdown'`
+   writes a `.md` reading copy instead). An empty `dir` lets the Host
    choose: the folder requested by the page when it is absolute and already exists, then Android's
    `/sdcard/Download` (only where that path exists), then the user's `Downloads` / `Download` / `Documents`
    (created when missing); the response's `dir` is where the file really landed. JSON responses carry
@@ -203,7 +206,7 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 - Import skips duplicates: same title, update time, message count and first message means the same conversation, and the status line reports how many were skipped
 - A full localStorage is surfaced as a "local storage is full" toast instead of silently dropping changes
 - A render failure shows a fallback inside this panel (with retry) instead of blanking the whole page
-- "Delete" keeps only an 8-second undo window (the "Undo" in the toast); after that, or once another deletion replaces the snapshot, it is permanent
+- Only a single conversation can be exported as Markdown; bulk export and import still use JSON
 
 ## Visual origin
 

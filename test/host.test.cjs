@@ -108,6 +108,35 @@ async function main() {
   assert.equal(saved.threads.length, 1, 'the file holds one conversation');
   assert.equal(saved.threads[0].pinnedAt, 1700000000500, 'the pin state survives the export');
   assert.equal(saved.threads[0].messages[0].at, 1700000000001, 'message timestamps survive the export');
+
+  // The same route can write a Markdown reading copy instead of JSON.
+  const markdownRequest = Readable.from([
+    Buffer.from(JSON.stringify({ dir, threads: [thread], format: 'markdown' }), 'utf8'),
+  ]);
+  markdownRequest.method = 'POST';
+  markdownRequest.url = '/chat-replica/export';
+  const markdownResponse = {
+    writableEnded: false,
+    writeHead(status, headers) {
+      this.statusCode = status;
+      this.headers = headers;
+    },
+    end(payload) {
+      this.writableEnded = true;
+      this.body = String(payload ?? '');
+    },
+  };
+  await routes[0].handler(markdownRequest, markdownResponse);
+  assert.equal(markdownResponse.statusCode, 200, 'the markdown export answers 200: ' + markdownResponse.body);
+  const markdownResult = JSON.parse(markdownResponse.body);
+  assert.ok(markdownResult.path.endsWith('.md'), 'the markdown export uses a .md file');
+  assert.ok(markdownResult.path.startsWith(dir), 'the markdown file lands beside the JSON one');
+  const markdown = fs.readFileSync(markdownResult.path, 'utf8');
+  assert.ok(markdown.startsWith('# 单条导出'), 'the markdown starts with the conversation title');
+  assert.ok(markdown.includes('## 用户'), 'the markdown has a user section');
+  assert.ok(markdown.includes('## 助手'), 'the markdown has an assistant section');
+  assert.ok(markdown.includes('你好呀'), 'the markdown keeps the assistant text');
+
   fs.rmSync(dir, { recursive: true, force: true });
 
   // The folder shortcuts come from the Host and only list existing directories.
