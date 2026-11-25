@@ -99,6 +99,9 @@
 ## 环境要求
 
 - 一个带 Web UI 与插件系统的 DSH 安装（Desktop 版，或 `dsh` 的 web profile）
+- **DSH ≥ 0.2.1-rc.2**（`engines.dsh` 声明为 `>=0.2.1-rc.2 <0.3.0`）。0.2.1-rc.2 上已核对 `llm.listProviders` /
+  `llm.listModels` / `llm.resolveModelInfo`、`agentDefaultModel.currentSelection` 与前缀路由注册都在；
+  后续版本新增的接口若缺失，对应功能会静默降级（例如拿不到模型目录时选择器只剩「跟随默认」）
 - 模型、语音识别、朗读分别复用 DSH 中已有的 `llm` / `speechToText` / `DEEPSEEK_API_KEY`，本插件不单独保存凭据
 
 ## 安装

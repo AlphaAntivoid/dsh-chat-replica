@@ -1,6 +1,6 @@
 {
   "name": "@local/deepseek-chat-ui",
-  "version": "1.14.0",
+  "version": "1.14.1",
   "description": "DeepSeek chat-demo style conversation page for the DeepSeek Harness (DSH) Web UI",
   "license": "MIT",
   "author": "AlphaAntivoid",
@@ -21,7 +21,7 @@
     "chat-ui"
   ],
   "engines": {
-    "dsh": ">=0.2.2-rc.3 <0.3.0"
+    "dsh": ">=0.2.1-rc.2 <0.3.0"
   },
   "type": "module",
   "scripts": {

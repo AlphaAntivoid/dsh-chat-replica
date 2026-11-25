@@ -102,7 +102,12 @@ demo conversations.
 ## Requirements
 
 - A DSH installation with the Web UI and plugin system (Desktop build, or a `dsh` web profile)
-- Model, speech recognition and read-aloud reuse the `llm` / `speechToText` / `DEEPSEEK_API_KEY` already configured in your DSH; the plugin stores no credentials of its own
+- **DSH ≥ 0.2.1-rc.2** (`engines.dsh` is `>=0.2.1-rc.2 <0.3.0`). On 0.2.1-rc.2 we verified
+  `llm.listProviders` / `llm.listModels` / `llm.resolveModelInfo`, `agentDefaultModel.currentSelection` and
+  prefix route registration. If an addition from a later release is missing, the matching feature degrades
+  silently (for example, without a model catalog the picker only offers "Use default")
+- Model, speech recognition and read-aloud reuse the `llm` / `speechToText` / `DEEPSEEK_API_KEY` already
+  configured in your DSH; the plugin stores no credentials of its own
 
 ## Install
 

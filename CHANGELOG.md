@@ -3,6 +3,18 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.14.1
+
+### 中文
+
+- 放宽 `engines.dsh` 到 `>=0.2.1-rc.2 <0.3.0`：在 0.2.1-rc.2 的 `@deepseek-ai/dsh-llm`、`dsh-agent-default-model`、`dsh-host-webserver` 里核对了 `listProviders` / `listModels` / `resolveModelInfo` / `currentSelection` 与前缀路由注册，之前的 0.2.2-rc.3 下限没有必要
+- 在 0.2.1 上安装不再需要版本豁免；README 的「环境要求」写明支持的版本与降级行为
+
+### English
+
+- Widened `engines.dsh` to `>=0.2.1-rc.2 <0.3.0`: 0.2.1-rc.2's `@deepseek-ai/dsh-llm`, `dsh-agent-default-model` and `dsh-host-webserver` all ship `listProviders` / `listModels` / `resolveModelInfo` / `currentSelection` and prefix route registration, so the previous 0.2.2-rc.3 floor was unnecessary
+- Installs on 0.2.1 no longer need a version exemption; the Requirements section documents the supported range and the degradation behavior
+
 ## 1.14.0
 
 ### 中文
