@@ -3,6 +3,20 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.3.0
+
+### 中文
+
+- 导入去重：标题、更新时间、消息数与首条消息相同即视为重复，导入结果会显示「跳过 N 个重复」
+- 本地存储写满时给一次可见提示（`本地存储已满，最近的改动可能没有保存`），不再静默失败
+- 面板级错误边界：渲染异常时只显示兜底页并提供「重试」，不再整页白屏
+
+### English
+
+- Import de-duplication: identical title, update time, message count and first message count as a duplicate, and the result reports "skipped N duplicates"
+- A full localStorage now surfaces a visible toast instead of failing silently
+- Panel-level error boundary: a render failure shows a fallback with "Retry" instead of blanking the page
+
 ## 1.2.0
 
 ### 中文

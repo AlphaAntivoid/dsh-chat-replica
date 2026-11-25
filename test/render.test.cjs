@@ -16,6 +16,7 @@ const SOURCE = fs.readFileSync(FILE, 'utf8');
 
 let instances = new Map();
 let domCache = new Map();
+let classInstances = new Map();
 let currentInst = null;
 let renderRoot = null;
 let dirty = false;
@@ -28,7 +29,23 @@ function sameDeps(a, b) {
   return true;
 }
 
+/** Minimal class-component base, enough for an error boundary under test. */
+class Component {
+  constructor(props) {
+    this.props = props || {};
+    this.state = {};
+  }
+  setState(partial) {
+    const next = typeof partial === 'function' ? partial(this.state, this.props) : partial;
+    this.state = Object.assign({}, this.state, next || {});
+    dirty = true;
+    if (!rendering) rerender();
+  }
+}
+Component.prototype.isReactComponent = {};
+
 const React = {
+  Component,
   createElement(type, props, ...children) {
     const flat = [];
     const push = (child) => {
@@ -137,6 +154,25 @@ function renderTree(node, pathKey) {
   }
   const type = node.type;
   if (typeof type === 'function') {
+    if (type.prototype && type.prototype.isReactComponent) {
+      const classKey = pathKey + ':' + (type.name || 'class');
+      let instance = classInstances.get(classKey);
+      if (!instance) {
+        instance = new type(node.props);
+        classInstances.set(classKey, instance);
+      } else {
+        instance.props = node.props;
+      }
+      const previousInst = currentInst;
+      currentInst = null;
+      let output;
+      try {
+        output = instance.render();
+      } finally {
+        currentInst = previousInst;
+      }
+      return renderTree(output, classKey);
+    }
     const key = pathKey + ':' + (type.name || 'anon');
     let inst = instances.get(key);
     if (!inst) {
@@ -291,20 +327,23 @@ function emitDocument(name, event) {
   (documentListeners.get(name) || []).slice().forEach((handler) => handler(event));
 }
 
-function mount(storageSeed) {
+function mount(storageSeed, options) {
   instances = new Map();
   domCache = new Map();
+  classInstances = new Map();
   currentInst = null;
   renderRoot = null;
   dirty = false;
   rendering = false;
 
+  const failWrites = Boolean(options && options.failWrites);
   const storage = new Map(Object.entries(storageSeed || {}));
   const localStorage = {
     getItem(key) {
       return storage.has(key) ? storage.get(key) : null;
     },
     setItem(key, value) {
+      if (failWrites) throw new Error('QuotaExceededError');
       storage.set(key, String(value));
     },
     removeItem(key) {
@@ -859,6 +898,56 @@ async function main() {
     tree = rerender();
     assert(byClass(tree, 'cd-toast').length === 1, 'the export result is announced in the toast');
     console.log('PASS 17: bulk export reports its result');
+  }
+
+  /* --- 18. a failed localStorage write is announced ------------------------ */
+  {
+    const session = mount(undefined, { failWrites: true });
+    renderPanel(session);
+    await wait(520);
+    const tree = rerender();
+    assert(byClass(tree, 'cd-toast').length === 1, 'a failed localStorage write surfaces as a toast');
+    assert(
+      textOf(byClass(tree, 'cd-toast')[0]).indexOf('本地存储已满') >= 0,
+      'the toast explains that storage is full',
+    );
+    console.log('PASS 18: storage failures are reported');
+  }
+
+  /* --- 19. import skips duplicates ----------------------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-settings')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-modal').length === 1, 'the settings dialog opens');
+    const modal = byClass(tree, 'cd-modal')[0];
+    const input = byClass(modal, 'cd-file-input')[0];
+    assert(input, 'the import file input is rendered');
+    const entry = {
+      title: '重复导入测试',
+      updatedAt: 1700000000000,
+      messages: [
+        { role: 'user', text: '你好' },
+        { role: 'assistant', text: '你好呀' },
+      ],
+    };
+    const payload = JSON.stringify({ threads: [entry, entry] });
+    const file = {
+      text: async function () {
+        return payload;
+      },
+    };
+    input.props.onChange({ target: { files: [file], value: '' } });
+    await wait(40);
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 6, 'only one copy of a duplicated import is added');
+    const status = byClass(tree, 'cd-status')[0];
+    assert(
+      status && textOf(status).indexOf('跳过 1 个重复') >= 0,
+      'the status reports the skipped duplicate: ' + (status ? textOf(status) : 'none'),
+    );
+    console.log('PASS 19: importing skips duplicates');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

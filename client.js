@@ -97,7 +97,13 @@ window.__ModuleLoader__.load({
       'action.confirmDelete': '删除',
       'action.close': '关闭',
       'toast.imported': '已导入 {count} 个对话',
+      'toast.importedSkipped': '已导入 {count} 个对话，跳过 {skipped} 个重复',
+      'toast.importedNone': '没有新对话，{count} 个都是重复的',
       'toast.importFailed': '导入失败：不是有效的导出文件',
+      'toast.storageFull': '本地存储已满，最近的改动可能没有保存',
+      'error.boundary.title': '对话模式出了点问题',
+      'error.boundary.desc': '你的本地对话还在。可以点重试，或切换到别的面板再回来。',
+      'error.boundary.retry': '重试',
       'toast.exported': '已导出：{path}',
       'toast.exportFailed': '导出失败，请重试',
       'theme.system': '跟随系统',
@@ -217,7 +223,13 @@ window.__ModuleLoader__.load({
       'action.confirmDelete': 'Delete',
       'action.close': 'Close',
       'toast.imported': 'Imported {count} conversations',
+      'toast.importedSkipped': 'Imported {count} conversations, skipped {skipped} duplicates',
+      'toast.importedNone': 'No new conversations — {count} duplicates skipped',
       'toast.importFailed': 'Import failed: not a valid export file',
+      'toast.storageFull': 'Local storage is full — recent changes may not be saved',
+      'error.boundary.title': 'Chat mode hit a problem',
+      'error.boundary.desc': 'Your local conversations are still here. Retry, or switch to another panel and come back.',
+      'error.boundary.retry': 'Retry',
       'toast.exported': 'Exported to {path}',
       'toast.exportFailed': 'Export failed, try again',
       'theme.system': 'System',
@@ -744,6 +756,15 @@ window.__ModuleLoader__.load({
         });
       }
       return out;
+    }
+
+    /** 导入去重用的指纹：标题 + 更新时间 + 消息数 + 首条消息开头。 */
+    function threadFingerprint(thread) {
+      const first =
+        thread.messages.length > 0 && typeof thread.messages[0].text === 'string'
+          ? thread.messages[0].text.slice(0, 48)
+          : '';
+      return [thread.title, thread.updatedAt, thread.messages.length, first].join('\u0001');
     }
 
     function exportThread(thread) {
@@ -2616,6 +2637,7 @@ window.__ModuleLoader__.load({
       const [selectedIds, setSelectedIds] = useState([]);
       const [renameTarget, setRenameTarget] = useState(null);
       const [deleteTarget, setDeleteTarget] = useState(null);
+      const [storageError, setStorageError] = useState(false);
 
       const bodyRef = useRef(null);
       const textareaRef = useRef(null);
@@ -2639,7 +2661,8 @@ window.__ModuleLoader__.load({
           if (active === null || active === undefined) window.localStorage.removeItem(STORE_ACTIVE);
           else window.localStorage.setItem(STORE_ACTIVE, active);
         } catch (error) {
-          /* a full quota must not break the conversation */
+          // 配额满时不能让界面报错，但必须让用户知道最近的改动可能没保存。
+          setStorageError(true);
         }
       }, []);
 
@@ -2655,7 +2678,7 @@ window.__ModuleLoader__.load({
           if (Object.keys(clean).length === 0) window.localStorage.removeItem(STORE_DRAFTS);
           else window.localStorage.setItem(STORE_DRAFTS, JSON.stringify(clean));
         } catch (error) {
-          /* a full quota must not break typing */
+          setStorageError(true);
         }
       }, []);
 
@@ -2871,6 +2894,16 @@ window.__ModuleLoader__.load({
           setToast(null);
         }, 2600);
       }, []);
+
+      /** 写 localStorage 失败（配额满）时给一次可见的提示，而不是悄悄丢数据。 */
+      useEffect(
+        function () {
+          if (!storageError) return;
+          setStorageError(false);
+          showToast(t('toast.storageFull'));
+        },
+        [storageError, showToast, t],
+      );
 
       useEffect(
         function () {
@@ -3643,11 +3676,35 @@ window.__ModuleLoader__.load({
             if (list === null) throw new Error('bad-format');
             const imported = normalizeThreads(list);
             if (imported.length === 0) throw new Error('empty');
-            const next = imported.concat(threads);
+            /** 同一个文件导入两次、或文件内部有重复条目，都只保留一份。 */
+            const seen = {};
+            threads.forEach(function (thread) {
+              seen[threadFingerprint(thread)] = true;
+            });
+            const fresh = [];
+            imported.forEach(function (thread) {
+              const fingerprint = threadFingerprint(thread);
+              if (seen[fingerprint]) return;
+              seen[fingerprint] = true;
+              fresh.push(thread);
+            });
+            const skipped = imported.length - fresh.length;
+            if (fresh.length === 0) {
+              return { ok: true, text: t('toast.importedNone').replace('{count}', String(skipped)) };
+            }
+            const next = fresh.concat(threads);
             setThreads(next);
-            setActiveId(imported[0].id);
-            saveNow(next, imported[0].id);
-            return { ok: true, text: t('toast.imported').replace('{count}', String(imported.length)) };
+            setActiveId(fresh[0].id);
+            saveNow(next, fresh[0].id);
+            if (skipped > 0) {
+              return {
+                ok: true,
+                text: t('toast.importedSkipped')
+                  .replace('{count}', String(fresh.length))
+                  .replace('{skipped}', String(skipped)),
+              };
+            }
+            return { ok: true, text: t('toast.imported').replace('{count}', String(fresh.length)) };
           } catch (error) {
             return { ok: false, text: t('toast.importFailed') };
           }
@@ -4349,6 +4406,11 @@ body[data-ds-dark-theme] .cd-send:disabled{opacity:.55}
 .cd-confirm-pill-cancel:hover{background:#e4e4e4}
 .cd-confirm-pill-danger{background:var(--dsw-alias-state-error-primary);color:var(--dsw-static-neutral-bluish-00,#fff)}
 .cd-confirm-pill-danger:hover{opacity:.9}
+.cd-fallback{align-items:center;justify-content:center;padding:32px}
+.cd-fallback-box{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:420px;text-align:center}
+.cd-fallback-title{color:var(--dsw-alias-label-primary);font-size:16px;font-weight:600;line-height:24px}
+.cd-fallback-desc{margin:0;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px}
+.cd-fallback-retry{width:auto;min-width:96px;height:36px;padding:0 18px}
 .cd-status{margin:10px 0 0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;overflow-wrap:anywhere}
 .cd-status-error{color:var(--dsw-alias-state-error-primary)}
 .cd-browse{display:flex;flex:1;flex-direction:column;min-height:0;padding:0 18px 18px}
@@ -4371,6 +4433,59 @@ body[data-ds-dark-theme] .cd-send:disabled{opacity:.55}
 /* 暗色模式的主按钮填充是近白色（brand-primary = neutral-bluish-50），白字看不见，文字改黑色 */
 body[data-ds-dark-theme] .cd-btn-primary{color:#000}
 `;
+
+    /**
+     * 面板级错误边界：渲染异常时只让这一块显示兜底，而不是整页白屏。
+     * 对话存在 localStorage 里，重试或切走再回来都不会丢。
+     */
+    class ChatBoundary extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { failed: false };
+        this.retry = this.retry.bind(this);
+      }
+      static getDerivedStateFromError() {
+        return { failed: true };
+      }
+      componentDidCatch(error) {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error('[deepseek-chat-ui]', error);
+        }
+      }
+      retry() {
+        this.setState({ failed: false });
+      }
+      render() {
+        if (!this.state.failed) return this.props.children;
+        const t = this.props.t;
+        return h(
+          'section',
+          { className: 'cd-page cd-fallback', 'aria-label': t('panel.label') },
+          h('style', null, CSS),
+          h(
+            'div',
+            { className: 'cd-fallback-box' },
+            h('div', { className: 'cd-fallback-title' }, t('error.boundary.title')),
+            h('p', { className: 'cd-fallback-desc' }, t('error.boundary.desc')),
+            h(
+              'button',
+              { type: 'button', className: 'cd-newchat cd-fallback-retry', onClick: this.retry },
+              t('error.boundary.retry'),
+            ),
+          ),
+        );
+      }
+    }
+
+    /** 槽位入口：给 ChatReplica 套一层错误边界，异常只坏这一块面板。 */
+    function ChatPanel(props) {
+      const locale = readLocaleId(props.getLocale ? props.getLocale() : null);
+      const dict = locale === 'en' ? en : zh;
+      const translate = function (key) {
+        return dict[key] === undefined ? key : dict[key];
+      };
+      return h(ChatBoundary, { t: translate }, h(ChatReplica, props));
+    }
 
     /* ---------------------------------------------------------------- plugin */
 
@@ -4400,7 +4515,7 @@ body[data-ds-dark-theme] .cd-btn-primary{color:#000}
               return { getTheme: getTheme, getLocale: getLocale, getWorkspace: getWorkspace };
             },
           },
-          ChatReplica,
+          ChatPanel,
         );
       });
 

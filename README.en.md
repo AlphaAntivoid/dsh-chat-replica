@@ -167,7 +167,9 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 - Voice depends on the WebView's microphone permission and a `speechToText` provider; a missing one produces a hint.
 - The speech model (SenseVoice, 163 MB) is downloaded on first use; offline recognition works once it is present.
 - Switching the language writes DSH's own locale preference, so the whole UI (sidebar included) switches with it.
-- Import merges without de-duplicating: importing the same file twice creates duplicate conversations.
+- Import skips duplicates: same title, update time, message count and first message means the same conversation, and the status line reports how many were skipped
+- A full localStorage is surfaced as a "local storage is full" toast instead of silently dropping changes
+- A render failure shows a fallback inside this panel (with retry) instead of blanking the whole page
 - "Delete" is a permanent local delete with no recycle bin; bulk delete is equally irreversible.
 
 ## Visual origin
