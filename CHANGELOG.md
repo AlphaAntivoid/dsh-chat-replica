@@ -3,6 +3,18 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.10.2
+
+### 中文
+
+- 删除确认弹窗补一行小字：`8 秒内可在提示条点「撤销」；超过 8 秒就会永久删除。`，标题保持原样
+- 中英 README 的删除确认规格同步更新；渲染测试校验这行说明文案
+
+### English
+
+- The delete confirmation now carries a note: "You can undo within 8 seconds from the toast; after that it is permanent.", while the headline stays unchanged
+- Both READMEs describe the updated confirmation, and a render test asserts the note
+
 ## 1.10.1
 
 ### 中文

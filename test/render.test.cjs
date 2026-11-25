@@ -661,6 +661,10 @@ async function main() {
       textOf(byClass(tree, 'cd-delete-title')[0]).trim() === '删除后，该对话将不可恢复',
       'exact confirmation title, got ' + textOf(byClass(tree, 'cd-delete-title')[0]),
     );
+    assert(
+      textOf(byClass(tree, 'cd-delete-note')[0]).trim() === '8 秒内可在提示条点「撤销」；超过 8 秒就会永久删除。',
+      'the confirmation explains the undo window: ' + textOf(byClass(tree, 'cd-delete-note')[0]),
+    );
     const danger = byClass(tree, 'cd-confirm-pill-danger')[0];
     const cancel = byClass(tree, 'cd-confirm-pill-cancel')[0];
     assert(textOf(danger).trim() === '删除该对话', 'danger pill label');

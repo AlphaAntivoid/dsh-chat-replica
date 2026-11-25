@@ -66,8 +66,9 @@ The "⋯" on the right of every conversation opens:
 The delete confirmation is intentionally fixed in wording and styling:
 
 1. Title: `This conversation cannot be restored after deletion` (multi-select: `The selected N conversations cannot be restored after deletion`)
-2. Red pill with white text: `Delete conversation`
-3. Light-grey pill with black text: `Cancel`, focused by default, so pressing Enter cancels
+2. A note under the title: `You can undo within 8 seconds from the toast; after that it is permanent.`
+3. Red pill with white text: `Delete conversation`
+4. Light-grey pill with black text: `Cancel`, focused by default, so pressing Enter cancels
 
 After confirming, a toast stays for **8 seconds** with an "Undo" action: undoing restores the deleted
 conversations, their drafts and the conversation that was open at the time. After 8 seconds — or once another

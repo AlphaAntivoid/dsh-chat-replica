@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.10.1';
+    const PLUGIN_VERSION = '1.10.2';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -165,6 +165,7 @@ window.__ModuleLoader__.load({
       'rename.save': '保存',
       'delete.title': '删除后，该对话将不可恢复',
       'delete.titleMulti': '删除后，选中的 {count} 个对话将不可恢复',
+      'delete.undoNote': '8 秒内可在提示条点「撤销」；超过 8 秒就会永久删除。',
       'delete.action': '删除该对话',
       'delete.actionMulti': '删除选中的 {count} 个对话',
       'select.count': '已选 {count} 个',
@@ -310,6 +311,7 @@ window.__ModuleLoader__.load({
       'rename.save': 'Save',
       'delete.title': 'This conversation cannot be restored after deletion',
       'delete.titleMulti': 'The selected {count} conversations cannot be restored after deletion',
+      'delete.undoNote': 'You can undo within 8 seconds from the toast; after that it is permanent.',
       'delete.action': 'Delete conversation',
       'delete.actionMulti': 'Delete {count} conversations',
       'select.count': '{count} selected',
@@ -2664,6 +2666,7 @@ window.__ModuleLoader__.load({
             onKeyDown: onDialogKeyDown,
           },
           h('h3', { className: 'cd-delete-title' }, title),
+          h('p', { className: 'cd-delete-note' }, t('delete.undoNote')),
           h(
             'div',
             { className: 'cd-delete-actions' },
@@ -4895,6 +4898,7 @@ body[data-ds-dark-theme] .cd-send:disabled{opacity:.55}
 .cd-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 .cd-delete-confirm{max-width:320px;padding:22px 20px 18px}
 .cd-delete-title{margin:0;color:var(--dsw-alias-label-primary);font-size:16px;font-weight:600;line-height:24px}
+.cd-delete-note{margin:8px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
 .cd-delete-actions{display:flex;gap:10px;margin-top:22px}
 .cd-confirm-pill{display:inline-flex;flex:1;align-items:center;justify-content:center;height:40px;padding:0 14px;border:none;border-radius:999px;font-family:inherit;font-size:14px;font-weight:500;line-height:20px;white-space:nowrap;cursor:pointer;transition:background-color .15s,opacity .15s}
 .cd-confirm-pill:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
