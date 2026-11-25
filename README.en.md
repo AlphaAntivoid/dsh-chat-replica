@@ -27,6 +27,10 @@ A conversation forked from an answer (dark theme):
 
 ![Fork](media/screenshots/fork-dark.png)
 
+Find in a conversation: press Ctrl/Cmd+F, matches are highlighted, and the current match is marked solid.
+
+![Find in conversation](media/screenshots/find-dark.png)
+
 Light theme:
 
 ![Light theme](media/screenshots/light.png)
@@ -41,6 +45,7 @@ Light theme:
 - Any answer can be forked: the conversation is copied up to that answer into a new one titled "· fork", so you can continue in another direction; pin state is not inherited
 - A user message can be edited and re-answered: saving truncates to that message and discards what follows (Ctrl/Cmd+Enter saves, Esc cancels)
 - A single conversation can be exported as a **Markdown** reading copy; JSON remains the backup and re-import format
+- Find in a conversation: Ctrl/Cmd+F highlights matches, marks the current one solid, Enter / Shift+Enter jump, Esc closes
 - Message bubbles, welcome screen, composer, Markdown (headings / lists / inline code / code blocks) and a collapsible "Thought" block
 - Upload text files, voice input, send / stop on the right of the composer
 - "Deep thinking" maps to the model's reasoningEffort (on = max, off = off; levels come from the model declaration)

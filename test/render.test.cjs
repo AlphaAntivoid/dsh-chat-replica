@@ -1150,6 +1150,39 @@ async function main() {
     console.log('PASS 28: a conversation exports as Markdown');
   }
 
+  /* --- 29. find inside the open conversation ------------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    const openFind = collect(tree, (node) => node.kind === 'host' && node.props['aria-label'] === '查找')[0];
+    assert(openFind, 'the header offers a find action');
+    click(openFind);
+    tree = rerender();
+    let input = byClass(tree, 'cd-find-input')[0];
+    assert(input, 'the find bar opens');
+    input.props.onChange({ target: { value: '防抖' } });
+    tree = rerender();
+    assert(
+      textOf(byClass(tree, 'cd-find-count')[0]).trim() === '1/2',
+      'the counter counts matching messages: ' + textOf(byClass(tree, 'cd-find-count')[0]),
+    );
+    assert(byClass(tree, 'cd-mark').length > 0, 'the matching text is highlighted');
+    input = byClass(tree, 'cd-find-input')[0];
+    input.props.onKeyDown({ key: 'Enter', preventDefault() {}, stopPropagation() {} });
+    tree = rerender();
+    assert(
+      textOf(byClass(tree, 'cd-find-count')[0]).trim() === '2/2',
+      'Enter moves to the next match: ' + textOf(byClass(tree, 'cd-find-count')[0]),
+    );
+    input = byClass(tree, 'cd-find-input')[0];
+    input.props.onKeyDown({ key: 'Escape', stopPropagation() {} });
+    tree = rerender();
+    assert(byClass(tree, 'cd-find').length === 0, 'Escape closes the find bar');
+    console.log('PASS 29: a conversation can be searched in place');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 

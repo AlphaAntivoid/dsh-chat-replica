@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.11.0';
+    const PLUGIN_VERSION = '1.12.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -162,6 +162,12 @@ window.__ModuleLoader__.load({
       'menu.exportJson': '导出 JSON',
       'menu.exportMarkdown': '导出 Markdown',
       'menu.delete': '删除',
+      'find.open': '查找',
+      'find.placeholder': '在当前对话中查找',
+      'find.none': '无匹配',
+      'find.prev': '上一个匹配',
+      'find.next': '下一个匹配',
+      'find.close': '关闭查找',
       'rename.title': '重命名对话',
       'rename.field': '对话标题',
       'rename.save': '保存',
@@ -310,6 +316,12 @@ window.__ModuleLoader__.load({
       'menu.exportJson': 'Export JSON',
       'menu.exportMarkdown': 'Export Markdown',
       'menu.delete': 'Delete',
+      'find.open': 'Find',
+      'find.placeholder': 'Find in this conversation',
+      'find.none': 'No matches',
+      'find.prev': 'Previous match',
+      'find.next': 'Next match',
+      'find.close': 'Close find',
       'rename.title': 'Rename conversation',
       'rename.field': 'Conversation title',
       'rename.save': 'Save',
@@ -502,6 +514,7 @@ window.__ModuleLoader__.load({
       ],
       chevronLeft: [['path', { d: 'M14.5 6l-6 6 6 6' }]],
       chevronDown: [['path', { d: 'M6 9.5l6 6 6-6' }]],
+      chevronUp: [['path', { d: 'M6 14.5l6-6 6 6' }]],
       volume: [
         ['path', { d: 'M4.6 9.4h3.2L12.4 6v12l-4.6-3.4H4.6a.7.7 0 0 1-.7-.7v-3.8a.7.7 0 0 1 .7-.7z' }],
         ['path', { d: 'M15.6 9.1a4.7 4.7 0 0 1 0 5.8M18.6 6.4a8.6 8.6 0 0 1 0 11.2' }],
@@ -928,6 +941,67 @@ window.__ModuleLoader__.load({
       return h('p', { key: prefix }, renderInline(lines.join(' '), prefix + '-p'));
     }
 
+    /** 把一段纯文本按查询词切成「文本 + <mark>」片段（大小写不敏感）。 */
+    function highlightText(text, needle, prefix) {
+      const lower = text.toLowerCase();
+      const wanted = needle.toLowerCase();
+      const out = [];
+      let from = 0;
+      let at = lower.indexOf(wanted);
+      let index = 0;
+      while (at >= 0) {
+        if (at > from) out.push(text.slice(from, at));
+        out.push(h('mark', { key: (prefix || '') + 'm' + index, className: 'cd-mark' }, text.slice(at, at + wanted.length)));
+        from = at + wanted.length;
+        index += 1;
+        at = lower.indexOf(wanted, from);
+      }
+      if (from < text.length) out.push(text.slice(from));
+      return out;
+    }
+
+    /** 递归遍历 Markdown 渲染出的 React 树，把命中查询的文本包进 <mark>。 */
+    function highlightChildren(children, needle, prefix) {
+      const out = [];
+      children.forEach(function (child, index) {
+        if (child === null || child === undefined || child === false) {
+          out.push(child);
+          return;
+        }
+        if (typeof child === 'string') {
+          highlightText(child, needle, prefix + index + '-').forEach(function (piece) {
+            out.push(piece);
+          });
+          return;
+        }
+        if (Array.isArray(child)) {
+          highlightChildren(child, needle, prefix + index + '-').forEach(function (piece) {
+            out.push(piece);
+          });
+          return;
+        }
+        if (child.props && Array.isArray(child.props.children)) {
+          out.push(
+            Object.assign({}, child, {
+              props: Object.assign({}, child.props, {
+                children: highlightChildren(child.props.children, needle, prefix + index + '-'),
+              }),
+            }),
+          );
+          return;
+        }
+        out.push(child);
+      });
+      return out;
+    }
+
+    function highlightTree(node, needle) {
+      if (!node || !node.props || !Array.isArray(node.props.children)) return node;
+      return Object.assign({}, node, {
+        props: Object.assign({}, node.props, { children: highlightChildren(node.props.children, needle, '') }),
+      });
+    }
+
     function Markdown(props) {
       const text = props.text || '';
       const pattern = /```([a-z0-9]*)\n([\s\S]*?)```/g;
@@ -951,7 +1025,9 @@ window.__ModuleLoader__.load({
           })
           .filter(Boolean);
       });
-      return h('div', { className: 'cd-md' }, children);
+      const tree = h('div', { className: 'cd-md' }, children);
+      const needle = typeof props.highlight === 'string' ? props.highlight.trim() : '';
+      return needle === '' ? tree : highlightTree(tree, needle);
     }
 
     /* --------------------------------------------------------- audio capture */
@@ -2959,8 +3035,13 @@ window.__ModuleLoader__.load({
       /** 删除后 8 秒内可撤销；快照包含被删会话、草稿和当时的激活会话。 */
       const [undoDelete, setUndoDelete] = useState(null);
       const [storageError, setStorageError] = useState(false);
+      /** 会话内查找：Ctrl/Cmd+F 打开，回车 / Shift+回车切换命中，Esc 关闭。 */
+      const [findOpen, setFindOpen] = useState(false);
+      const [findQuery, setFindQuery] = useState('');
+      const [findIndex, setFindIndex] = useState(0);
 
       const bodyRef = useRef(null);
+      const findInputRef = useRef(null);
       const textareaRef = useRef(null);
       const abortRef = useRef(null);
       const recorderRef = useRef(null);
@@ -3067,6 +3148,82 @@ window.__ModuleLoader__.load({
           );
         },
         [threads, activeId],
+      );
+
+      const findNeedle = findQuery.trim();
+      /** 命中的消息（按消息计数，命中词会在正文里单独高亮）。 */
+      const findMatches = useMemo(
+        function () {
+          const needle = findNeedle.toLowerCase();
+          if (!findOpen || needle === '' || !activeThread) return [];
+          return activeThread.messages.filter(function (message) {
+            return typeof message.text === 'string' && message.text.toLowerCase().indexOf(needle) >= 0;
+          });
+        },
+        [findOpen, findNeedle, activeThread],
+      );
+      const findActive = findMatches.length === 0 ? -1 : Math.min(findIndex, findMatches.length - 1);
+
+      const closeFind = useCallback(function () {
+        setFindOpen(false);
+        setFindQuery('');
+        setFindIndex(0);
+      }, []);
+
+      // 切换会话时收起查找条，避免旧查询挂在新对话上。
+      useEffect(
+        function () {
+          if (findOpen) closeFind();
+        },
+        [activeId],
+      );
+
+      const stepFind = useCallback(
+        function (delta) {
+          setFindIndex(function (current) {
+            if (findMatches.length === 0) return 0;
+            const base = current >= findMatches.length ? 0 : current;
+            return (base + delta + findMatches.length) % findMatches.length;
+          });
+        },
+        [findMatches.length],
+      );
+
+      useEffect(
+        function () {
+          if (!findOpen || findMatches.length === 0) return;
+          const message = findMatches[Math.min(findIndex, findMatches.length - 1)];
+          if (!message) return;
+          const scope =
+            typeof document !== 'undefined' && document && typeof document.querySelector === 'function'
+              ? document.querySelector('[data-mid="' + message.id + '"]')
+              : null;
+          if (scope && typeof scope.scrollIntoView === 'function') {
+            scope.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          }
+        },
+        [findOpen, findIndex, findMatches],
+      );
+
+      // Ctrl/Cmd+F 打开会话内查找；对话框打开时让位给它们自己的快捷键。
+      useEffect(
+        function () {
+          const onKey = function (event) {
+            if (!(event.metaKey || event.ctrlKey) || (event.key !== 'f' && event.key !== 'F')) return;
+            if (!activeThread || settingsOpen || renameTarget !== null || deleteTarget !== null || editTarget !== null) return;
+            event.preventDefault();
+            setFindOpen(true);
+            setTimeout(function () {
+              const input = findInputRef.current;
+              if (input && input.focus) input.focus();
+            }, 0);
+          };
+          window.addEventListener('keydown', onKey);
+          return function () {
+            window.removeEventListener('keydown', onKey);
+          };
+        },
+        [activeThread, settingsOpen, renameTarget, deleteTarget, editTarget],
       );
 
       useEffect(
@@ -4278,6 +4435,92 @@ window.__ModuleLoader__.load({
         );
       };
 
+      /** 命中消息的强调类；当前命中再多一个 active。 */
+      const hitClass = function (message) {
+        if (!findOpen || findNeedle === '') return '';
+        if (typeof message.text !== 'string' || message.text.toLowerCase().indexOf(findNeedle.toLowerCase()) < 0) return '';
+        return findMatches[findActive] === message ? ' cd-hit cd-hit-active' : ' cd-hit';
+      };
+
+      const renderFindBar = function () {
+        const total = findMatches.length;
+        const focusInput = function () {
+          setTimeout(function () {
+            const input = findInputRef.current;
+            if (input && input.focus) input.focus();
+          }, 0);
+        };
+        return h(
+          'div',
+          { className: 'cd-find', role: 'search' },
+          h(Icon, { name: 'search', size: 15 }),
+          h('input', {
+            ref: findInputRef,
+            className: 'cd-find-input',
+            value: findQuery,
+            placeholder: t('find.placeholder'),
+            'aria-label': t('find.placeholder'),
+            onChange: function (event) {
+              setFindQuery(event.target.value);
+              setFindIndex(0);
+            },
+            onKeyDown: function (event) {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                stepFind(event.shiftKey ? -1 : 1);
+                return;
+              }
+              if (event.key === 'Escape') {
+                event.stopPropagation();
+                closeFind();
+              }
+            },
+          }),
+          h('span', { className: 'cd-find-count' }, total === 0 ? t('find.none') : findActive + 1 + '/' + total),
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'cd-iconbtn cd-iconbtn-sm',
+              title: t('find.prev'),
+              'aria-label': t('find.prev'),
+              disabled: total === 0,
+              onClick: function () {
+                stepFind(-1);
+                focusInput();
+              },
+            },
+            h(Icon, { name: 'chevronUp', size: 16 }),
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'cd-iconbtn cd-iconbtn-sm',
+              title: t('find.next'),
+              'aria-label': t('find.next'),
+              disabled: total === 0,
+              onClick: function () {
+                stepFind(1);
+                focusInput();
+              },
+            },
+            h(Icon, { name: 'chevronDown', size: 16 }),
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'cd-iconbtn cd-iconbtn-sm',
+              title: t('find.close'),
+              'aria-label': t('find.close'),
+              onClick: closeFind,
+            },
+            h(Icon, { name: 'x', size: 16 }),
+          ),
+        );
+      };
+
       const renderThread = function () {
         if (!activeThread) return null;
         const messages = activeThread.messages;
@@ -4289,7 +4532,7 @@ window.__ModuleLoader__.load({
             if (message.role === 'user') {
               return h(
                 'div',
-                { key: message.id, className: 'cd-user' },
+                { key: message.id, className: 'cd-user' + hitClass(message), 'data-mid': message.id },
                 message.files && message.files.length > 0
                   ? h(
                       'div',
@@ -4304,7 +4547,13 @@ window.__ModuleLoader__.load({
                       }),
                     )
                   : null,
-                message.text ? h('div', { className: 'cd-bubble' }, message.text) : null,
+                message.text
+                  ? h(
+                      'div',
+                      { className: 'cd-bubble' },
+                      hitClass(message) === '' ? message.text : highlightText(message.text, findNeedle, 'u'),
+                    )
+                  : null,
                 renderActions(message),
               );
             }
@@ -4312,7 +4561,7 @@ window.__ModuleLoader__.load({
             const waiting = streaming && message.text === '' && !message.reasoning && !message.search;
             return h(
               'div',
-              { key: message.id, className: 'cd-assistant' },
+              { key: message.id, className: 'cd-assistant' + hitClass(message), 'data-mid': message.id },
               renderSearch(message),
               message.reasoning
                 ? h(
@@ -4333,7 +4582,10 @@ window.__ModuleLoader__.load({
               waiting
                 ? h('div', { className: 'cd-waiting' }, h('i', null), h('i', null), h('i', null))
                 : message.text
-                  ? h(Markdown, { text: message.text })
+                  ? h(Markdown, {
+                      text: message.text,
+                      highlight: hitClass(message) === '' ? '' : findNeedle,
+                    })
                   : null,
               message.error
                 ? h(
@@ -4491,6 +4743,25 @@ window.__ModuleLoader__.load({
               activeThread ? activeThread.title : t('app.name'),
             ),
             h('span', { className: 'cd-header-spacer' }),
+            collapsed || !hasMessages
+              ? null
+              : h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'cd-iconbtn cd-iconbtn-sm',
+                    title: t('find.open'),
+                    'aria-label': t('find.open'),
+                    onClick: function () {
+                      setFindOpen(true);
+                      setTimeout(function () {
+                        const input = findInputRef.current;
+                        if (input && input.focus) input.focus();
+                      }, 0);
+                    },
+                  },
+                  h(Icon, { name: 'search', size: 18 }),
+                ),
             collapsed
               ? null
               : h(
@@ -4509,6 +4780,7 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'cd-body', ref: bodyRef },
+            findOpen ? renderFindBar() : null,
             hasMessages
               ? renderThread()
               : h('div', { className: 'cd-welcome' }, h('div', { className: 'cd-greeting' }, t('greeting'))),
@@ -4921,6 +5193,13 @@ body[data-ds-dark-theme] .cd-send:disabled{opacity:.55}
 .cd-delete-confirm{max-width:320px;padding:22px 20px 18px}
 .cd-delete-title{margin:0;color:var(--dsw-alias-label-primary);font-size:16px;font-weight:600;line-height:24px}
 .cd-delete-note{margin:8px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
+.cd-find{position:sticky;top:8px;z-index:6;display:flex;align-items:center;gap:6px;box-sizing:border-box;width:min(640px,calc(100% - 32px));margin:8px auto 0;padding:5px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.cd-find-input{flex:1;min-width:0;border:0;outline:none;background:transparent;color:var(--dsw-alias-label-primary);font:13px/20px var(--dsw-font-family)}
+.cd-find-count{color:var(--dsw-alias-label-tertiary);font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+mark.cd-mark{padding:0 1px;border-radius:3px;background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,transparent);color:var(--dsw-alias-label-primary);box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--dsw-alias-state-warn-primary) 85%,transparent)}
+.cd-hit{scroll-margin-block:96px}
+.cd-hit-active mark.cd-mark{background:var(--dsw-alias-state-warn-primary);color:#1f1f1f;box-shadow:none}
+.cd-hit-active .cd-bubble{box-shadow:0 0 0 2px color-mix(in srgb,var(--dsw-alias-state-warn-primary) 55%,transparent)}
 .cd-delete-actions{display:flex;gap:10px;margin-top:22px}
 .cd-confirm-pill{display:inline-flex;flex:1;align-items:center;justify-content:center;height:40px;padding:0 14px;border:none;border-radius:999px;font-family:inherit;font-size:14px;font-weight:500;line-height:20px;white-space:nowrap;cursor:pointer;transition:background-color .15s,opacity .15s}
 .cd-confirm-pill:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}

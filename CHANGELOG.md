@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.12.0
+
+### 中文
+
+- 新增会话内查找：`Ctrl/Cmd+F` 打开查找条，命中词以琥珀色高亮，当前命中为实色并给气泡描边
+- 计数按消息计（如 `1/2`），回车 / Shift+回车或上下按钮跳转，Esc 关闭；切换会话时自动收起
+- Markdown 渲染树会在查找时逐节点包 `<mark class="cd-mark">`，代码块内同样命中
+- 中英 README 增加查找截图；渲染测试覆盖打开、计数、高亮、跳转与关闭
+
+### English
+
+- Added in-conversation find: Ctrl/Cmd+F opens a find bar, matches are highlighted in amber, the current match is solid with a bubble outline
+- The counter counts messages (`1/2`); Enter / Shift+Enter or the arrows jump, Esc closes, switching conversations hides it
+- The Markdown tree wraps matches in `<mark class="cd-mark">` node by node, including inside code blocks
+- Both READMEs show the new screenshot; render tests cover opening, counting, highlighting, jumping and closing
+
 ## 1.11.0
 
 ### 中文
