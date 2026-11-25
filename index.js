@@ -87,6 +87,10 @@ async function handle(req, res, ctx) {
     sendJson(res, 200, { scheme: await readSystemScheme() });
     return;
   }
+  if (url.pathname === `${ROUTE_PREFIX}/paths`) {
+    sendJson(res, 200, { dirs: exportPaths() });
+    return;
+  }
   if (url.pathname === `${ROUTE_PREFIX}/export`) {
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'method' });
     await exportConversations(req, res);
@@ -547,6 +551,23 @@ function isDirectory(path) {
   }
 }
 
+/**
+ * Directories the page can offer as export targets or as browsing shortcuts.
+ * Only directories that already exist are returned, so the page never offers a
+ * shortcut that would fail.
+ *
+ * @returns Entries of `{ id, path }`, most specific first.
+ */
+export function exportPaths() {
+  const entries = [
+    { id: 'downloads', path: join(homedir(), 'Downloads') },
+    { id: 'documents', path: join(homedir(), 'Documents') },
+    { id: 'home', path: homedir() },
+  ];
+  if (isDirectory('/sdcard/Download')) entries.unshift({ id: 'androidDownload', path: '/sdcard/Download' });
+  return entries.filter((entry) => isDirectory(entry.path));
+}
+
 /** Write the page's conversations next to the user's other downloads. */
 async function exportConversations(req, res) {
   let payload;
@@ -560,7 +581,15 @@ async function exportConversations(req, res) {
 
   const now = new Date();
   const pad = (value) => String(value).padStart(2, '0');
-  const stamp = [now.getFullYear(), pad(now.getMonth() + 1), pad(now.getDate()), pad(now.getHours()), pad(now.getMinutes()), pad(now.getSeconds())].join('-');
+  const stamp = [
+    now.getFullYear(),
+    pad(now.getMonth() + 1),
+    pad(now.getDate()),
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+    pad(now.getSeconds()),
+    String(now.getMilliseconds()).padStart(3, '0'),
+  ].join('-');
   const name = `deepseek-chat-${stamp}.json`;
   const text = JSON.stringify(
     {

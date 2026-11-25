@@ -3,6 +3,20 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.6.0
+
+### 中文
+
+- 导出文件夹浏览器的快捷目录改由 Host 提供（新路由 `/chat-replica/paths`）：桌面显示 Downloads / Documents / 主目录，Android 才显示 `/sdcard`，不再写死 Android 路径
+- 导出文件名追加毫秒，连续导出不会互相覆盖
+- 会话搜索支持回车打开第一条命中
+
+### English
+
+- The export-folder browser now takes its shortcuts from the Host (new `/chat-replica/paths` route): Downloads / Documents / Home on desktop, `/sdcard` only on Android, instead of hard-coded Android paths
+- Export file names include milliseconds, so back-to-back exports never overwrite each other
+- Pressing Enter in the conversation search opens the first match
+
 ## 1.5.2
 
 ### 中文

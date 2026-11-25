@@ -110,7 +110,28 @@ async function main() {
   assert.equal(saved.threads[0].messages[0].at, 1700000000001, 'message timestamps survive the export');
   fs.rmSync(dir, { recursive: true, force: true });
 
-  console.log('PASS: host export directory resolution and single-thread export');
+  // The folder shortcuts come from the Host and only list existing directories.
+  const pathsResponse = {
+    writableEnded: false,
+    writeHead(status, headers) {
+      this.statusCode = status;
+      this.headers = headers;
+    },
+    end(payload) {
+      this.writableEnded = true;
+      this.body = String(payload ?? '');
+    },
+  };
+  const pathsRequest = { method: 'GET', url: '/chat-replica/paths' };
+  await routes[0].handler(pathsRequest, pathsResponse);
+  assert.equal(pathsResponse.statusCode, 200, 'the paths route answers 200');
+  const pathsBody = JSON.parse(pathsResponse.body);
+  assert.ok(Array.isArray(pathsBody.dirs), 'the paths route returns a dirs array');
+  for (const entry of pathsBody.dirs) {
+    assert.ok(fs.existsSync(entry.path), 'a returned shortcut exists: ' + entry.path);
+  }
+
+  console.log('PASS: host export directory resolution, single-thread export and folder shortcuts');
 }
 
 main().catch((error) => {

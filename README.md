@@ -25,7 +25,7 @@
 ## 功能
 
 - 会话侧栏：按今天 / 昨天 / 7 天内 / 30 天内分组，本地持久化；右上角胶囊 `☰` 打开抽屉、`＋` 新建对话
-- 会话搜索：按标题与消息全文过滤；Esc 或输入框里的清除按钮恢复全部
+- 会话搜索：按标题与消息全文过滤，回车直接打开第一条命中；Esc 或输入框里的清除按钮恢复全部
 - 草稿按会话隔离：在 A 里打半句去 B 不会串，切走面板再回来也还在
 - 键盘可用：菜单方向键 / Home / End 导航，行上 F2 重命名、Delete 删除，对话框内 Tab 循环且关闭后焦点还原
 - 每条消息带本地时间（`HH:MM`），悬停或触屏时与操作按钮一起显示
@@ -120,7 +120,7 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
 
 | 文件 | 作用 |
 | --- | --- |
-| `index.js` | Host 半边：`/chat-replica/chat`（NDJSON 模型流）、`/chat-replica/transcribe`（16k WAV 转文字）、`/chat-replica/tts`（朗读 PCM 代理）、`/chat-replica/system-theme`、`/chat-replica/export`（写 JSON 到指定目录） |
+| `index.js` | Host 半边：`/chat-replica/chat`（NDJSON 模型流）、`/chat-replica/transcribe`（16k WAV 转文字）、`/chat-replica/tts`（朗读 PCM 代理）、`/chat-replica/system-theme`、`/chat-replica/paths`（导出快捷目录）、`/chat-replica/export`（写 JSON 到指定目录） |
 | `client.js` | 浏览器半边：`main` 页面 + `sidebar.panellist` 图标，内含 CSS、中英文字典、Markdown、录音与上传 |
 | `cordis.patch.yml` | bundle 补丁（安装时由 Plugin Manager 读取） |
 | `locale/zh.json`、`locale/en.json` | Plugin Manager 里显示的名称与描述 |

@@ -1017,6 +1017,23 @@ async function main() {
     console.log('PASS 22: deleting can be undone within 8 seconds');
   }
 
+  /* --- 23. Enter in the search opens the first match ----------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    byClass(tree, 'cd-filter-input')[0].props.onChange({ target: { value: '灵隐寺' } });
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 1, 'the search narrowed the list');
+    const input = byClass(tree, 'cd-filter-input')[0];
+    input.props.onKeyDown({ key: 'Enter', preventDefault() {}, stopPropagation() {} });
+    tree = rerender();
+    assert(
+      textOf(byClass(tree, 'cd-header-title')[0]).trim() === '杭州两天一夜怎么安排',
+      'Enter opens the first matching conversation: ' + textOf(byClass(tree, 'cd-header-title')[0]),
+    );
+    console.log('PASS 23: Enter opens the first search result');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 

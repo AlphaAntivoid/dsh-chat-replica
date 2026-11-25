@@ -90,6 +90,9 @@ window.__ModuleLoader__.load({
       'settings.browseFailed': '无法读取该文件夹',
       'settings.browsing': '读取中…',
       'settings.storageInternal': '内部存储',
+      'settings.quickDownloads': '下载',
+      'settings.quickDocuments': '文档',
+      'settings.quickHome': '主目录',
       'settings.deleteAll': '删除所有对话',
       'settings.deleteAllHint': '不可恢复',
       'settings.deleteAllAsk': '删除所有对话？',
@@ -220,6 +223,9 @@ window.__ModuleLoader__.load({
       'settings.browseFailed': 'Cannot read this folder',
       'settings.browsing': 'Loading…',
       'settings.storageInternal': 'Internal storage',
+      'settings.quickDownloads': 'Downloads',
+      'settings.quickDocuments': 'Documents',
+      'settings.quickHome': 'Home',
       'settings.deleteAll': 'Delete all conversations',
       'settings.deleteAllHint': 'cannot be undone',
       'settings.deleteAllAsk': 'Delete all conversations?',
@@ -1107,6 +1113,28 @@ window.__ModuleLoader__.load({
       const [listing, setListing] = useState(null);
       const [browseError, setBrowseError] = useState('');
       const fileRef = useRef(null);
+      /** 快捷目录由 Host 提供（桌面是 Downloads / Documents / 主目录，Android 是 /sdcard）。 */
+      const [quickDirs, setQuickDirs] = useState([]);
+      useEffect(
+        function () {
+          let alive = true;
+          fetch(`${API}/paths`, { headers: { accept: 'application/json' } })
+            .then(function (response) {
+              return response.ok ? response.json() : null;
+            })
+            .then(function (body) {
+              if (!alive || body === null || !Array.isArray(body.dirs)) return;
+              setQuickDirs(body.dirs);
+            })
+            .catch(function () {
+              /* keep the built-in fallback */
+            });
+          return function () {
+            alive = false;
+          };
+        },
+        [],
+      );
 
       useEffect(
         function () {
@@ -1238,11 +1266,22 @@ window.__ModuleLoader__.load({
         ['zh', t('language.zh')],
         ['en', t('language.en')],
       ];
-      const quick = [
-        ['/sdcard/Download', 'Download'],
-        ['/sdcard/Documents', 'Documents'],
-        ['/sdcard', t('settings.storageInternal')],
-      ];
+      const quickLabels = {
+        downloads: t('settings.quickDownloads'),
+        documents: t('settings.quickDocuments'),
+        home: t('settings.quickHome'),
+        androidDownload: 'Download',
+      };
+      const quick =
+        quickDirs.length > 0
+          ? quickDirs.map(function (entry) {
+              return [entry.path, quickLabels[entry.id] || entry.id];
+            })
+          : [
+              ['/sdcard/Download', 'Download'],
+              ['/sdcard/Documents', 'Documents'],
+              ['/sdcard', t('settings.storageInternal')],
+            ];
       const currentLocale = locale === 'en' ? t('language.en') : t('language.zh');
 
       const tabButton = function (id, label, icon) {
@@ -2043,6 +2082,11 @@ window.__ModuleLoader__.load({
               setQuery(event.target.value);
             },
             onKeyDown: function (event) {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                if (visibleThreads.length > 0) props.onSelect(visibleThreads[0].id);
+                return;
+              }
               if (event.key !== 'Escape') return;
               event.stopPropagation();
               if (query !== '') setQuery('');

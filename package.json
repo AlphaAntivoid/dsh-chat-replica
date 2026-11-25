@@ -1,6 +1,6 @@
 {
   "name": "@local/deepseek-chat-ui",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "description": "DeepSeek chat-demo style conversation page for the DeepSeek Harness (DSH) Web UI",
   "license": "MIT",
   "author": "AlphaAntivoid",

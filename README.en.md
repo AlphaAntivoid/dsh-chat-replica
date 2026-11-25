@@ -26,7 +26,7 @@ Light theme:
 ## Features
 
 - Conversation sidebar grouped by Today / Yesterday / Previous 7 days / Previous 30 days, persisted locally; the `☰` capsule opens the drawer and `＋` starts a new conversation
-- Conversation search filters titles and message bodies; Esc or the clear button in the field restores the full list
+- Conversation search filters titles and message bodies; Enter opens the first match, while Esc or the clear button in the field restores the full list
 - Drafts are stored per conversation: half a sentence typed in A never shows up in B, and it survives leaving the panel
 - Keyboard support: arrow keys / Home / End navigate the menu, F2 renames and Delete deletes a focused conversation, and Tab stays inside dialogs with focus restored on close
 - Every message carries its local time (`HH:MM`), shown with the action buttons on hover or on touch
@@ -127,7 +127,7 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 
 | File | Purpose |
 | --- | --- |
-| `index.js` | Host half: `/chat-replica/chat` (NDJSON model stream), `/chat-replica/transcribe` (16 kHz WAV to text), `/chat-replica/tts` (read-aloud PCM proxy), `/chat-replica/system-theme`, `/chat-replica/export` (writes JSON to a directory) |
+| `index.js` | Host half: `/chat-replica/chat` (NDJSON model stream), `/chat-replica/transcribe` (16 kHz WAV to text), `/chat-replica/tts` (read-aloud PCM proxy), `/chat-replica/system-theme`, `/chat-replica/paths` (export folder shortcuts), `/chat-replica/export` (writes JSON to a directory) |
 | `client.js` | Browser half: the `main` page plus the `sidebar.panellist` icon, with CSS, the Chinese and English dictionaries, Markdown, recording and upload |
 | `cordis.patch.yml` | Bundle patch, read by the Plugin Manager at install time |
 | `locale/zh.json`, `locale/en.json` | Name and description shown in the Plugin Manager |
