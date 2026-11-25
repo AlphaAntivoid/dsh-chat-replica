@@ -78,6 +78,7 @@ if (pkg) {
   requireFile('docs/DETAIL.md', 'English plugin detail document');
   requireFile('docs/DETAIL.zh.md', 'Chinese plugin detail document');
   requireFile('docs/preview.svg', 'plugin detail illustration');
+  requireFile('docs/PERF.md', 'long-list performance evaluation');
 }
 
 for (const locale of ['zh', 'en']) {

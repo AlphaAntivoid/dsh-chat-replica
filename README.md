@@ -124,6 +124,7 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
   只用于「删除确认」里刻意要求灰白底黑字的按钮）。
 - 本地检查：`npm test` 跑无头渲染回归、样式类完整性与包元数据；`npm run bundle` 产出
   `dist/dsh-chat-replica-<version>.tar.gz`。
+- 长列表为什么不做虚拟滚动、实测数据与阈值建议见 [docs/PERF.md](docs/PERF.md)。
 - 发版：更新 `CHANGELOG.md` 与 `package.json` 的 `version`，打 tag `v<version>` 并推送；GitHub Actions
   会自动跑测试、打包并创建 Release。
 

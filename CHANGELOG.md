@@ -3,6 +3,18 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.10.1
+
+### 中文
+
+- 新增 `docs/PERF.md`：长列表窗口化评估，含 200 / 1,000 / 3,000 条的 Edge 布局实测、无头 React 重渲染数据、阈值建议与风险清单
+- 元数据测试新增 `docs/PERF.md` 存在性校验
+
+### English
+
+- Added `docs/PERF.md`: a long-list windowing evaluation with Edge layout measurements at 200 / 1,000 / 3,000 rows, headless React re-render data, thresholds and risks
+- The metadata test now verifies that `docs/PERF.md` exists
+
 ## 1.10.0
 
 ### 中文

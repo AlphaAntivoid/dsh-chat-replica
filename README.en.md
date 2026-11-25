@@ -131,6 +131,8 @@ Restart DSH to take effect. To uninstall, remove that insert and the
   the deliberate light-grey / black "Cancel" pill in the delete confirmation.
 - Local checks: `npm test` (headless render regressions, stylesheet integrity, package metadata);
   `npm run bundle` writes `dist/dsh-chat-replica-<version>.tar.gz`.
+- Why the long conversation list is not windowed, plus measurements and thresholds:
+  [docs/PERF.md](docs/PERF.md).
 - Releasing: update `CHANGELOG.md` and `version` in `package.json`, then push a `v<version>` tag; GitHub Actions
   runs the tests, builds the bundle and creates the Release.
 
