@@ -48,7 +48,7 @@
 
 ![模型选择](media/screenshots/model-dark.png)
 
-设置页：主题、字号、语言，页脚显示版本、仓库链接与「检查更新」。
+设置页：主题、字号、语言、朗读音色，页脚显示版本、仓库链接与「检查更新」。
 
 ![设置](media/screenshots/settings-dark.png)
 

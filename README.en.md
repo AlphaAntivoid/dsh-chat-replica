@@ -50,7 +50,7 @@ Model picker: the composer shows the current model; open it to switch between pr
 
 ![Model picker](media/screenshots/model-dark.png)
 
-Settings: theme, text size and language, with the version, repository link and "check for updates" in the footer.
+Settings: theme, text size, language and read-aloud voice, with the version, repository link and "check for updates" in the footer.
 
 ![Settings](media/screenshots/settings-dark.png)
 

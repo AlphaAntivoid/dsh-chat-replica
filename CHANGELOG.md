@@ -3,6 +3,18 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.25.1
+
+### 中文
+
+- 重新生成 README 里的全部预览图（深色 10 张 + 浅色 1 张，1650×1080）：补上操作胶囊、模型选择、用量面板、「一键到底」，以及设置里的朗读音色行
+- 预览图统一用 1.2 倍缩放渲染，文字更清晰；截图仍由 `dsh-tools/make-screenshots.js` 从真实组件生成，动画在预览页里停用
+
+### English
+
+- Regenerated all README preview images (ten dark, one light, 1650×1080): they now show the action capsule, model picker, usage panel, jump-to-bottom button and the read-aloud voice row in settings
+- Previews render at 1.2× for crisper text; they are still produced from the real components by `dsh-tools/make-screenshots.js`, with animations disabled on the preview pages
+
 ## 1.25.0
 
 ### 中文
