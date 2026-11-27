@@ -1485,6 +1485,62 @@ async function main() {
     console.log('PASS 35: usage panels open with exact figures');
   }
 
+  /* --- 36. the context panel splits the prompt by origin ------------------- */
+  {
+    const session = mount(
+      {
+        'deepseek-chat-ui.threads.v1': JSON.stringify([
+          {
+            id: 't-breakdown',
+            title: '带分项的会话',
+            updatedAt: 1700000000000,
+            messages: [
+              { id: 'u1', role: 'user', text: '你好', at: 1700000000000 },
+              {
+                id: 'a1',
+                role: 'assistant',
+                text: '你好呀',
+                at: 1700000001000,
+                usage: { inputTokens: 1200, outputTokens: 356 },
+                context: { system: 300, messages: 1200, tools: 0 },
+              },
+            ],
+          },
+        ]),
+      },
+      {
+        fetch: async (url) => {
+          if (String(url).indexOf('/models') >= 0) {
+            return {
+              ok: true,
+              json: async () => ({
+                providers: [],
+                current: { provider: 'deepseek', model: 'deepseek-chat', contextWindow: 128000 },
+              }),
+              text: async () => '{}',
+            };
+          }
+          return { ok: true, json: async () => ({}), text: async () => '{}' };
+        },
+      },
+    );
+    let tree = renderPanel(session);
+    await wait(10);
+    tree = rerender();
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    click(byClass(tree, 'cd-meter')[0]);
+    tree = rerender();
+    const panel = byClass(tree, 'cd-usage-panel')[0];
+    assert(panel, 'the context panel opens');
+    const text = textOf(panel);
+    assert(text.indexOf('系统提示') >= 0, 'the panel names the system prompt: ' + text);
+    assert(text.indexOf('对话内容') >= 0, 'the panel names the conversation part');
+    assert(text.indexOf('工具调用') >= 0, 'the panel names the tool part');
+    assert(byClass(panel, 'cd-usage-seg').length === 2, 'only non-zero parts draw a segment');
+    console.log('PASS 36: the context panel splits the prompt by origin');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 

@@ -37,6 +37,11 @@ reasoning tokens), and the ring on the right of the composer shows context occup
 
 ![Usage and context](media/screenshots/usage-dark.png)
 
+The context panel splits the prompt by origin: system prompt / conversation / tool calls (this plugin has no
+tools, so that part stays 0); the split is estimated by the Host's `{type:'context'}` frame.
+
+![Context breakdown](media/screenshots/usage-context-dark.png)
+
 Model picker: the composer shows the current model; open it to switch between providers, or go back to the default.
 
 ![Model picker](media/screenshots/model-dark.png)
@@ -63,7 +68,8 @@ Light theme:
 - Model picker: the composer shows the current model; switch per provider or fall back to the default. The choice is stored locally and sent with each request; an unknown model falls back to the default
 - The settings footer can check for updates: it queries the latest GitHub release only when clicked and shows up-to-date / a new version (click again to open it) / a failed check
 - Usage matches DSH: every answer ends with this turn's `↑ billed input · ↓ output`, the composer ring shows context occupancy, and hovering reveals cache-hit and reasoning tokens
-- Clicking the usage line opens this turn's breakdown (uncached input / cached input / cache write / output with reasoning / cache hit / total); clicking the ring opens the context panel (percentage, bar, `~used / window`, remaining)
+- Clicking the usage line opens this turn's breakdown (uncached input / cached input / cache write / output with reasoning / cache hit / total); clicking the ring opens the context panel (percentage, bar, `~used / window`, remaining tokens, split by origin)
+- Exports carry usage: JSON keeps each turn's `usage` (and restores it on import), and Markdown appends `_用量：↑ … · ↓ … · 缓存命中 …%_` after every answer
 - Message bubbles, welcome screen, composer, Markdown (headings / lists / inline code / code blocks) and a collapsible "Thought" block
 - Upload text files, voice input, send / stop on the right of the composer
 - "Deep thinking" maps to the model's reasoningEffort (on = max, off = off; levels come from the model declaration)
@@ -220,7 +226,10 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 8. Usage: `llm.stream`'s `usage` chunk becomes a `{type:'usage', usage}` frame and the page stores it on that
    answer; the `{type:'model'}` frame carries `resolveModelInfo().context.contextWindow` (the `current` entry of
    `/models` carries it too), and the page draws the context ring from "last billed input + this turn's output ÷
-   window".
+   window". A `{type:'context'}` frame carries the per-origin estimate (system / messages / tools): CJK counts
+   one token per character and ASCII one per four, used only for the segmented bar, never for billing.
+9. Export: JSON keeps each message's `usage`; Markdown appends a `_用量：…_` line after an answer. Import only
+   accepts numeric usage fields.
 
 ## Privacy
 
@@ -242,7 +251,9 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 - A render failure shows a fallback inside this panel (with retry) instead of blanking the whole page
 - Only a single conversation can be exported as Markdown; bulk export and import still use JSON
 - Context occupancy is an **approximation**: last billed input plus this turn's output, divided by the route's
-  declared window. DSH has a token-meter pressure projection; this plugin has no equivalent live sampling
+  declared window. DSH has a token-meter pressure projection; this plugin has no equivalent live sampling. The
+  segmented bar is likewise a character-count estimate (one token per CJK character, one per four ASCII
+  characters), not a provider-exact tokenization
 
 ## Visual origin
 

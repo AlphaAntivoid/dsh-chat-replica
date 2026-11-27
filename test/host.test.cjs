@@ -99,7 +99,7 @@ async function main() {
     pinnedAt: 1700000000500,
     messages: [
       { role: 'user', text: '你好', at: 1700000000001 },
-      { role: 'assistant', text: '你好呀', at: 1700000000002 },
+      { role: 'assistant', text: '你好呀', at: 1700000000002, usage: { inputTokens: 1000, cacheReadTokens: 200, outputTokens: 356 } },
     ],
   };
   const request = Readable.from([
@@ -132,6 +132,8 @@ async function main() {
   assert.equal(saved.threads.length, 1, 'the file holds one conversation');
   assert.equal(saved.threads[0].pinnedAt, 1700000000500, 'the pin state survives the export');
   assert.equal(saved.threads[0].messages[0].at, 1700000000001, 'message timestamps survive the export');
+  assert.equal(saved.threads[0].messages[1].usage.outputTokens, 356, 'token usage survives the JSON export');
+  assert.equal(saved.threads[0].messages[1].usage.cacheReadTokens, 200, 'cache counters survive the JSON export');
 
   // The same route can write a Markdown reading copy instead of JSON.
   const markdownRequest = Readable.from([
@@ -160,6 +162,14 @@ async function main() {
   assert.ok(markdown.includes('## 用户'), 'the markdown has a user section');
   assert.ok(markdown.includes('## 助手'), 'the markdown has an assistant section');
   assert.ok(markdown.includes('你好呀'), 'the markdown keeps the assistant text');
+  assert.ok(markdown.includes('用量：'), 'the markdown records token usage');
+  assert.ok(markdown.includes('↓ 356'), 'the usage line carries the output count');
+  assert.ok(markdown.includes('缓存命中 17%'), 'the usage line carries the cache-hit share');
+
+  // The display-only token estimator mirrors the page heuristic.
+  assert.equal(host.estimateTokens('你好'), 2, 'CJK characters count one token each');
+  assert.equal(host.estimateTokens('hello'), 2, 'ASCII counts a quarter token per character');
+  assert.equal(host.estimateTokens(''), 0, 'empty text has no tokens');
 
   fs.rmSync(dir, { recursive: true, force: true });
 

@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.16.0';
+    const PLUGIN_VERSION = '1.17.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -292,6 +292,9 @@ window.__ModuleLoader__.load({
       'usage.remaining': '剩余约 {tokens} tokens',
       'usage.approx': '按上一轮计费输入 + 本轮输出估算，不是 provider 的精确压力值',
       'usage.close': '关闭',
+      'usage.system': '系统提示',
+      'usage.messages': '对话内容',
+      'usage.tools': '工具调用',
       'rename.title': '重命名对话',
       'rename.field': '对话标题',
       'rename.save': '保存',
@@ -473,6 +476,9 @@ window.__ModuleLoader__.load({
       'usage.remaining': '~{tokens} tokens left',
       'usage.approx': 'Estimated from the last billed input plus this turn’s output, not a provider-exact pressure reading',
       'usage.close': 'Close',
+      'usage.system': 'System prompt',
+      'usage.messages': 'Conversation',
+      'usage.tools': 'Tool calls',
       'rename.title': 'Rename conversation',
       'rename.field': 'Conversation title',
       'rename.save': 'Save',
@@ -966,6 +972,19 @@ window.__ModuleLoader__.load({
       return out;
     }
 
+    /** 只保留 usage 的数值字段；非法数据直接丢弃。 */
+    function pickUsage(value) {
+      if (value === null || typeof value !== 'object') return null;
+      const out = {};
+      ['inputTokens', 'outputTokens', 'totalTokens', 'cacheReadTokens', 'cacheWriteTokens', 'reasoningTokens'].forEach(
+        function (key) {
+          const number = value[key];
+          if (typeof number === 'number' && Number.isFinite(number) && number >= 0) out[key] = Math.round(number);
+        },
+      );
+      return out.inputTokens === undefined && out.outputTokens === undefined ? null : out;
+    }
+
     /** Accept our own export shape (or a bare array) and rebuild safe threads. */
     function normalizeThreads(list) {
       const out = [];
@@ -990,6 +1009,7 @@ window.__ModuleLoader__.load({
             role: message.role,
             text: message.text,
             ...(typeof message.at === 'number' ? { at: message.at } : {}),
+            ...(pickUsage(message.usage) === null ? {} : { usage: pickUsage(message.usage) }),
             ...(files.length > 0 ? { files: files } : {}),
           });
         }
@@ -1028,6 +1048,7 @@ window.__ModuleLoader__.load({
             role: message.role,
             text: message.text,
             ...(typeof message.at === 'number' ? { at: message.at } : {}),
+            ...(pickUsage(message.usage) === null ? {} : { usage: pickUsage(message.usage) }),
             ...(message.files && message.files.length > 0 ? { files: message.files } : {}),
           };
         }),
@@ -3485,7 +3506,9 @@ window.__ModuleLoader__.load({
             const message = activeThread.messages[index];
             if (message.role === 'assistant' && message.usage) {
               const totals = usageTotals(message.usage);
-              if (totals !== null) return { usage: message.usage, totals: totals };
+              if (totals !== null) {
+                return { usage: message.usage, totals: totals, context: message.context || null };
+              }
             }
           }
           return null;
@@ -4041,6 +4064,16 @@ window.__ModuleLoader__.load({
                 } else if (frame.type === 'usage') {
                   patchMessage(threadId, assistantId, function () {
                     return { usage: frame.usage || null };
+                  });
+                } else if (frame.type === 'context') {
+                  patchMessage(threadId, assistantId, function () {
+                    return {
+                      context: {
+                        system: Number(frame.system) || 0,
+                        messages: Number(frame.messages) || 0,
+                        tools: Number(frame.tools) || 0,
+                      },
+                    };
                   });
                 } else if (frame.type === 'model') {
                   if (typeof frame.contextWindow === 'number' && frame.contextWindow > 0) {
@@ -5049,6 +5082,32 @@ window.__ModuleLoader__.load({
             }),
           );
         } else if (usagePanel === 'context' && occupancy !== null) {
+          const breakdown = activeUsage === null ? null : activeUsage.context;
+          const parts =
+            breakdown === null
+              ? []
+              : [
+                  { key: 'system', label: t('usage.system'), tokens: breakdown.system },
+                  { key: 'messages', label: t('usage.messages'), tokens: breakdown.messages },
+                  { key: 'tools', label: t('usage.tools'), tokens: breakdown.tools },
+                ];
+          const estimateTotal = parts.reduce(function (sum, part) {
+            return sum + part.tokens;
+          }, 0);
+          const segments =
+            estimateTotal === 0
+              ? []
+              : parts
+                  .filter(function (part) {
+                    return part.tokens > 0;
+                  })
+                  .map(function (part, index) {
+                    return {
+                      key: part.key,
+                      width: (occupancy.percent * part.tokens) / estimateTotal,
+                      opacity: index === 0 ? 0.9 : index === 1 ? 0.55 : 0.3,
+                    };
+                  });
           body = h(
             'div',
             null,
@@ -5056,13 +5115,35 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { className: 'cd-usage-bar' },
-              h('span', { style: { width: occupancy.percent + '%' } }),
+              segments.length === 0
+                ? h('span', { style: { width: occupancy.percent + '%' } })
+                : segments.map(function (segment) {
+                    return h('span', {
+                      key: segment.key,
+                      className: 'cd-usage-seg',
+                      style: { width: segment.width + '%', opacity: segment.opacity },
+                    });
+                  }),
             ),
             h(
               'div',
               { className: 'cd-usage-figures' },
               '~' + formatTokenCount(occupancy.used) + ' / ' + formatTokenCount(occupancy.window),
             ),
+            parts.length === 0
+              ? null
+              : h(
+                  'dl',
+                  { className: 'cd-usage-rows' },
+                  parts.map(function (part) {
+                    return h(
+                      'div',
+                      { key: part.key, className: 'cd-usage-row' },
+                      h('dt', null, part.label),
+                      h('dd', null, '~' + formatTokenCount(part.tokens)),
+                    );
+                  }),
+                ),
             h(
               'div',
               { className: 'cd-usage-note' },
@@ -5839,6 +5920,7 @@ mark.cd-mark{padding:0 1px;border-radius:3px;background:color-mix(in srgb,var(--
 .cd-usage-percent{color:var(--dsw-alias-label-primary);font-size:22px;font-weight:600;line-height:28px;font-variant-numeric:tabular-nums}
 .cd-usage-bar{height:6px;margin:8px 0;overflow:hidden;border-radius:3px;background:color-mix(in srgb,currentColor 18%,transparent);color:var(--dsw-alias-label-tertiary)}
 .cd-usage-bar span{display:block;height:100%;border-radius:3px;background:var(--dsw-alias-label-secondary)}
+.cd-usage-bar .cd-usage-seg{background:var(--dsw-alias-label-secondary)}
 .cd-usage-figures{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;font-variant-numeric:tabular-nums}
 .cd-usage-note{margin-top:6px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
 .cd-usage{margin-right:2px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;font-variant-numeric:tabular-nums;white-space:nowrap}

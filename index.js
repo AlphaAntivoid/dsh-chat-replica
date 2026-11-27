@@ -207,6 +207,18 @@ async function chatStream(req, res, ctx) {
     ...(effort === undefined ? {} : { reasoningEffort: effort }),
   };
 
+  // Break the prompt down by origin so the page can draw a segmented context
+  // bar. Estimates only; the exact total still comes from the usage frame.
+  const historyText = (Array.isArray(payload.messages) ? payload.messages : [])
+    .map((message) => (message !== null && typeof message.text === 'string' ? message.text : ''))
+    .join('\n');
+  write({
+    type: 'context',
+    system: estimateTokens(options.system),
+    messages: estimateTokens(historyText),
+    tools: 0,
+  });
+
   try {
     for await (const chunk of llm.stream(options)) {
       if (chunk.type === 'text-delta') write({ type: 'text', text: chunk.text });
@@ -799,9 +811,67 @@ export function markdownOf(threads, now = new Date()) {
         lines.push('（附件：' + message.files.map((file) => file.name).join('、') + '）', '');
       }
       if (message.text !== '') lines.push(message.text, '');
+      if (message.usage !== undefined) {
+        const usage = message.usage;
+        const input =
+          (usage.inputTokens ?? 0) + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
+        const output = usage.outputTokens ?? 0;
+        const parts = ['↑ ' + compactTokens(input), '↓ ' + compactTokens(output)];
+        if ((usage.cacheReadTokens ?? 0) > 0 && input > 0) {
+          parts.push('缓存命中 ' + Math.round(((usage.cacheReadTokens ?? 0) / input) * 100) + '%');
+        }
+        lines.push('_用量：' + parts.join(' · ') + '_', '');
+      }
     });
   });
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+}
+
+/**
+ * Rough token estimate for display only: CJK code points count 1, other
+ * non-ASCII 0.5 and ASCII 0.25 (four characters per token).
+ *
+ * @param text - text to measure.
+ * @returns an integer estimate.
+ */
+export function estimateTokens(text) {
+  let tokens = 0;
+  for (const character of String(text ?? '')) {
+    const code = character.codePointAt(0);
+    if (code >= 0x2e80) tokens += 1;
+    else if (code < 128) tokens += 0.25;
+    else tokens += 0.5;
+  }
+  return Math.ceil(tokens);
+}
+
+/** Compact token count for Markdown exports: 999, 1.2K, 12K, 1.2M. */
+function compactTokens(value) {
+  const count = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+  if (count < 1000) return String(count);
+  if (count < 1000000) {
+    const scaled = count / 1000;
+    return (scaled >= 100 ? String(Math.round(scaled)) : String(Math.round(scaled * 10) / 10)) + 'K';
+  }
+  const scaled = count / 1000000;
+  return (scaled >= 100 ? String(Math.round(scaled)) : String(Math.round(scaled * 10) / 10)) + 'M';
+}
+
+/**
+ * Keep only the numeric token fields of a usage record; anything malformed is
+ * dropped so an imported file can never inject arbitrary data.
+ *
+ * @param value - candidate usage object.
+ * @returns the sanitized usage, or undefined when no counter survives.
+ */
+function sanitizeUsage(value) {
+  if (value === null || typeof value !== 'object') return undefined;
+  const out = {};
+  for (const key of ['inputTokens', 'outputTokens', 'totalTokens', 'cacheReadTokens', 'cacheWriteTokens', 'reasoningTokens']) {
+    const number = value[key];
+    if (typeof number === 'number' && Number.isFinite(number) && number >= 0) out[key] = Math.round(number);
+  }
+  return out.inputTokens === undefined && out.outputTokens === undefined ? undefined : out;
 }
 
 function sanitizeThread(thread) {
@@ -816,6 +886,7 @@ function sanitizeThread(thread) {
         role: message.role === 'assistant' ? 'assistant' : 'user',
         text: typeof message.text === 'string' ? message.text : '',
         ...(typeof message.at === 'number' ? { at: message.at } : {}),
+        ...(sanitizeUsage(message.usage) === undefined ? {} : { usage: sanitizeUsage(message.usage) }),
         ...(Array.isArray(message.files) && message.files.length > 0
           ? {
               files: message.files.map((file) => ({

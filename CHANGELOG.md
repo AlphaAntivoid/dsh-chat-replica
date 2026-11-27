@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.17.0
+
+### 中文
+
+- 上下文面板按来源分段：系统提示 / 对话内容 / 工具调用（本插件无工具，固定 0）；Host 通过 `{type:'context'}` 帧给出估算（CJK 1 字 ≈ 1 token、ASCII 4 字符 ≈ 1 token），只用于分段条与分项行
+- 导出带上用量：JSON 保留每条消息的 `usage`（导入时也只接受数值字段），Markdown 在每条回答后追加 `_用量：↑ … · ↓ … · 缓存命中 …%_`
+- 新增 `estimateTokens()` 导出（展示用）；Host 测试覆盖估算、JSON 用量保留与 Markdown 用量行
+- 测试：173 条断言
+
+### English
+
+- The context panel splits the prompt by origin: system prompt / conversation / tool calls (no tools here, so 0). The Host reports the estimate in a `{type:'context'}` frame (one token per CJK character, one per four ASCII characters); it only feeds the segmented bar and the rows
+- Exports carry usage: JSON keeps each message's `usage` (import only accepts numeric fields), and Markdown appends `_用量：↑ … · ↓ … · 缓存命中 …%_` after each answer
+- Added an `estimateTokens()` export (display only); Host tests cover the estimator, the JSON usage round-trip and the Markdown usage line
+- Tests: 173 assertions
+
 ## 1.16.0
 
 ### 中文
