@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.22.0';
+    const PLUGIN_VERSION = '1.23.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -195,6 +195,8 @@ window.__ModuleLoader__.load({
       'settings.locationHint': '打开文件管理选择',
       'settings.locationSet': '导出位置：{path}',
       'settings.locationDefault': '默认（系统下载目录）',
+      'settings.exportOfficial': '导出 DeepSeek 格式',
+      'settings.exportOfficialHint': '与官方 App 相同的 ZIP 结构（manifest / chat_session_index / chat_sessions）',
       'settings.browse': '选择导出文件夹',
       'settings.browseBack': '返回设置',
       'settings.browseUp': '上级',
@@ -385,6 +387,8 @@ window.__ModuleLoader__.load({
       'settings.locationHint': 'Browse the file manager',
       'settings.locationSet': 'Export folder: {path}',
       'settings.locationDefault': 'Default (system Downloads)',
+      'settings.exportOfficial': 'Export DeepSeek format',
+      'settings.exportOfficialHint': 'Same ZIP layout as the official app (manifest / chat_session_index / chat_sessions)',
       'settings.browse': 'Choose export folder',
       'settings.browseBack': 'Back to settings',
       'settings.browseUp': 'Up',
@@ -1313,9 +1317,7 @@ window.__ModuleLoader__.load({
         const localOffset = view.getUint32(cursor + 42, true);
         const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength));
         cursor += 46 + nameLength + extraLength + commentLength;
-        if (/\.(json|png|jpe?g|webp|gif|bmp)$/i.test(name)) {
-          entries.set(name, { method, compressedSize, localOffset });
-        }
+        if (!name.endsWith('/')) entries.set(name, { method, compressedSize, localOffset });
       }
       const read = async function (name) {
         const entry = entries.get(name);
@@ -1350,6 +1352,120 @@ window.__ModuleLoader__.load({
       if (typeof DecompressionStream !== 'function') throw new Error('unzip-unavailable');
       const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
       return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+
+    /* ------------------------------------------------------------ zip writer */
+
+    const CRC_TABLE = (function () {
+      const table = new Uint32Array(256);
+      for (let index = 0; index < 256; index += 1) {
+        let value = index;
+        for (let bit = 0; bit < 8; bit += 1) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+        table[index] = value >>> 0;
+      }
+      return table;
+    })();
+
+    function crc32(bytes) {
+      let crc = 0xffffffff;
+      for (let index = 0; index < bytes.length; index += 1) {
+        crc = CRC_TABLE[(crc ^ bytes[index]) & 0xff] ^ (crc >>> 8);
+      }
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+
+    /** Deflate one member when the platform supports it, else null. */
+    async function deflateRaw(bytes) {
+      if (typeof CompressionStream !== 'function') return null;
+      try {
+        const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+      } catch (error) {
+        return null;
+      }
+    }
+
+    /** DOS time/date pair for ZIP headers. */
+    function zipDateTime(date) {
+      return {
+        time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+        date: ((Math.max(1980, date.getFullYear()) - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
+      };
+    }
+
+    /**
+     * Build a ZIP archive from `{ name, bytes }` entries. Deflate is used when
+     * the platform exposes CompressionStream, stored entries otherwise.
+     *
+     * @param entries - members in write order.
+     * @returns the archive bytes.
+     */
+    async function makeZipArchive(entries) {
+      const stamp = zipDateTime(new Date());
+      const encoder = new TextEncoder();
+      const parts = [];
+      const central = [];
+      let offset = 0;
+      for (const entry of entries) {
+        const nameBytes = encoder.encode(entry.name);
+        const raw = entry.bytes instanceof Uint8Array ? entry.bytes : new Uint8Array(entry.bytes);
+        const deflated = raw.length >= 2048 ? await deflateRaw(raw) : null;
+        const data = deflated !== null && deflated.length < raw.length ? deflated : raw;
+        const method = data === raw ? 0 : 8;
+        const checksum = crc32(raw);
+
+        const local = new Uint8Array(30 + nameBytes.length);
+        const localView = new DataView(local.buffer);
+        localView.setUint32(0, 0x04034b50, true);
+        localView.setUint16(4, 20, true);
+        localView.setUint16(6, 0x0800, true);
+        localView.setUint16(8, method, true);
+        localView.setUint16(10, stamp.time, true);
+        localView.setUint16(12, stamp.date, true);
+        localView.setUint32(14, checksum, true);
+        localView.setUint32(18, data.length, true);
+        localView.setUint32(22, raw.length, true);
+        localView.setUint16(26, nameBytes.length, true);
+        local.set(nameBytes, 30);
+        parts.push(local, data);
+
+        const record = new Uint8Array(46 + nameBytes.length);
+        const recordView = new DataView(record.buffer);
+        recordView.setUint32(0, 0x02014b50, true);
+        recordView.setUint16(4, 20, true);
+        recordView.setUint16(6, 20, true);
+        recordView.setUint16(8, 0x0800, true);
+        recordView.setUint16(10, method, true);
+        recordView.setUint16(12, stamp.time, true);
+        recordView.setUint16(14, stamp.date, true);
+        recordView.setUint32(16, checksum, true);
+        recordView.setUint32(20, data.length, true);
+        recordView.setUint32(24, raw.length, true);
+        recordView.setUint16(28, nameBytes.length, true);
+        recordView.setUint32(42, offset, true);
+        record.set(nameBytes, 46);
+        central.push(record);
+        offset += local.length + data.length;
+      }
+      const centralSize = central.reduce(function (sum, record) {
+        return sum + record.length;
+      }, 0);
+      const eocd = new Uint8Array(22);
+      const eocdView = new DataView(eocd.buffer);
+      eocdView.setUint32(0, 0x06054b50, true);
+      eocdView.setUint16(8, entries.length, true);
+      eocdView.setUint16(10, entries.length, true);
+      eocdView.setUint32(12, centralSize, true);
+      eocdView.setUint32(16, offset, true);
+      const total = new Uint8Array(offset + centralSize + 22);
+      let cursor = 0;
+      const all = parts.concat(central);
+      for (const part of all) {
+        total.set(part, cursor);
+        cursor += part.length;
+      }
+      total.set(eocd, cursor);
+      return total;
     }
 
     /**
@@ -1500,6 +1616,159 @@ window.__ModuleLoader__.load({
       }
       if (threads.length === 0) throw new Error('empty');
       return threads;
+    }
+
+    /** UUID v4-shaped id for the official schema (which uses UUID strings). */
+    function makeUuid() {
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (character) {
+        const random = Math.floor(Math.random() * 16);
+        const value = character === 'x' ? random : (random & 0x3) | 0x8;
+        return value.toString(16);
+      });
+    }
+
+    function safeArchiveName(name, fallback) {
+      const cleaned = String(name || '')
+        .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80);
+      return cleaned === '' ? fallback : cleaned;
+    }
+
+    /** Extension for an image path when the display name has none. */
+    function imageExtension(type) {
+      if (type === 'image/png') return '.png';
+      if (type === 'image/gif') return '.gif';
+      if (type === 'image/webp') return '.webp';
+      if (type === 'image/bmp') return '.bmp';
+      return '.jpg';
+    }
+
+    function officialTime(value) {
+      const date = new Date(typeof value === 'number' && Number.isFinite(value) ? value : Date.now());
+      return date.toISOString();
+    }
+
+    /**
+     * Render one conversation in the official `chat_sessions/*.json` schema.
+     * Attachment bytes are collected into `entries` as sibling files.
+     *
+     * @param thread - normalized conversation.
+     * @param entries - archive members this session appends to.
+     * @returns the official session object.
+     */
+    async function officialSessionFromThread(thread, entries) {
+      const encoder = new TextEncoder();
+      const sessionId = makeUuid();
+      const filesDir = 'chat_sessions/' + sessionId + '_files';
+      const messages = [];
+      for (const message of thread.messages) {
+        const id = messages.length + 1;
+        const fragments = [];
+        const files = [];
+        if (message.role === 'user') {
+          if (typeof message.text === 'string' && message.text !== '') {
+            fragments.push({ type: 'REQUEST', content: message.text });
+          }
+        } else {
+          if (typeof message.reasoning === 'string' && message.reasoning !== '') {
+            fragments.push({ type: 'THINK', content: message.reasoning, elapsed_secs: 0 });
+          }
+          if (typeof message.text === 'string' && message.text !== '') {
+            fragments.push({ type: 'RESPONSE', content: message.text });
+          }
+        }
+        let fileIndex = 0;
+        for (const file of Array.isArray(message.files) ? message.files : []) {
+          fileIndex += 1;
+          const name = safeArchiveName(file && file.name, 'file-' + fileIndex + '.txt');
+          const path = filesDir + '/' + id + '-' + fileIndex + '-' + name;
+          const bytes = encoder.encode(typeof file?.text === 'string' ? file.text : '');
+          entries.push({ name: path, bytes: bytes });
+          files.push({
+            id: makeUuid(),
+            file_name: name,
+            file_size: bytes.length,
+            token_usage: 0,
+            inserted_at: officialTime(message.at),
+            export_path: path,
+            is_image: false,
+          });
+        }
+        for (const image of Array.isArray(message.images) ? message.images : []) {
+          const blob = await getImageBlob(image && image.id);
+          if (!blob) continue;
+          fileIndex += 1;
+          const name = safeArchiveName(image.name, 'image-' + fileIndex + '.png');
+          const suffix = /\.(png|jpe?g|webp|gif|bmp)$/i.test(name) ? '' : imageExtension(blob.type);
+          const path = filesDir + '/' + id + '-' + fileIndex + '-' + name + suffix;
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          entries.push({ name: path, bytes: bytes });
+          files.push({
+            id: makeUuid(),
+            file_name: name,
+            file_size: bytes.length,
+            token_usage: 0,
+            inserted_at: officialTime(message.at),
+            export_path: path,
+            is_image: true,
+          });
+        }
+        if (files.length > 0) fragments.push({ type: 'FILE', files: files });
+        const totals = usageTotals(message.usage);
+        messages.push({
+          id: id,
+          parent_id: id === 1 ? null : id - 1,
+          role: message.role === 'user' ? 'USER' : 'ASSISTANT',
+          status: 'FINISHED',
+          thinking_enabled: Boolean(message.reasoning),
+          search_enabled: false,
+          accumulated_token_usage: totals === null ? 0 : totals.input + totals.output,
+          inserted_at: officialTime(message.at),
+          fragments: fragments,
+        });
+      }
+      const firstAt = thread.messages.length > 0 ? thread.messages[0].at : undefined;
+      return {
+        id: sessionId,
+        title: typeof thread.title === 'string' ? thread.title : '',
+        pinned: typeof thread.pinnedAt === 'number',
+        current_message_id: messages.length === 0 ? null : messages[messages.length - 1].id,
+        inserted_at: officialTime(typeof thread.pinnedAt === 'number' ? thread.pinnedAt : firstAt),
+        updated_at: officialTime(thread.updatedAt),
+        messages: messages,
+      };
+    }
+
+    /** Build a ZIP that follows the DeepSeek app export layout. */
+    async function buildOfficialArchive(threads) {
+      const encoder = new TextEncoder();
+      const entries = [];
+      const index = [];
+      for (const thread of threads) {
+        const session = await officialSessionFromThread(thread, entries);
+        entries.push({
+          name: 'chat_sessions/' + session.id + '.json',
+          bytes: encoder.encode(JSON.stringify(session)),
+        });
+        index.push({
+          id: session.id,
+          title: session.title,
+          pinned: session.pinned,
+          message_count: session.messages.length,
+          inserted_at: session.inserted_at,
+          updated_at: session.updated_at,
+        });
+      }
+      entries.push({ name: 'manifest.json', bytes: encoder.encode(JSON.stringify({ export_format_version: 3 })) });
+      entries.push({
+        name: 'user.json',
+        bytes: encoder.encode(JSON.stringify({ user_id: '', email: '', mobile: null, oauth_profiles: null })),
+      });
+      entries.push({ name: 'chat_session_index.json', bytes: encoder.encode(JSON.stringify(index)) });
+      return makeZipArchive(entries);
     }
 
     /** 导入去重用的指纹：标题 + 更新时间 + 消息数 + 首条消息开头。 */
@@ -2049,6 +2318,22 @@ window.__ModuleLoader__.load({
         }
       };
 
+      const runExportOfficial = async function () {
+        if (busy) return;
+        setBusy(true);
+        setStatus(null);
+        try {
+          const result = await props.onExportOfficial();
+          setStatus(
+            result && result.ok
+              ? { kind: 'ok', text: result.text }
+              : { kind: 'error', text: (result && result.text) || t('toast.exportFailed') },
+          );
+        } finally {
+          setBusy(false);
+        }
+      };
+
       const pickImport = function (files) {
         const file = files && files[0];
         if (!file) return;
@@ -2329,6 +2614,14 @@ window.__ModuleLoader__.load({
             action: t('settings.download'),
             disabled: busy || props.threadCount === 0,
             onClick: runExport,
+          },
+          {
+            key: 'exportOfficial',
+            title: t('settings.exportOfficial'),
+            hint: t('settings.exportOfficialHint'),
+            action: t('settings.download'),
+            disabled: busy || props.threadCount === 0,
+            onClick: runExportOfficial,
           },
           {
             key: 'location',
@@ -5145,6 +5438,47 @@ window.__ModuleLoader__.load({
         [threads, t],
       );
 
+      /** 导出为官方 App 的 ZIP 结构：页面打包（含图片），Host 写进导出目录。 */
+      const exportOfficial = useCallback(
+        async function () {
+          if (threads.length === 0) return { ok: false, text: t('toast.exportFailed') };
+          let bytes;
+          try {
+            bytes = await buildOfficialArchive(threads);
+          } catch (error) {
+            return { ok: false, text: t('toast.exportFailed') };
+          }
+          const attempt = async function () {
+            const response = await fetch(
+              `${API}/export-official?dir=${encodeURIComponent(exportDir)}`,
+              { method: 'POST', headers: { 'content-type': 'application/zip' }, body: bytes },
+            );
+            const text = await response.text();
+            let body = {};
+            try {
+              body = JSON.parse(text);
+            } catch (error) {
+              body = {};
+            }
+            if (!response.ok) {
+              const reason = body.message || body.error || 'HTTP ' + response.status;
+              return { ok: false, text: t('toast.exportFailed') + '：' + reason };
+            }
+            return { ok: true, text: t('toast.exported').replace('{path}', shortPath(body.path || '')) };
+          };
+          try {
+            return await attempt();
+          } catch (error) {
+            try {
+              return await attempt();
+            } catch (second) {
+              return { ok: false, text: t('toast.exportFailed') + '：' + ((second && second.message) || String(second)) };
+            }
+          }
+        },
+        [threads, exportDir, t],
+      );
+
       /** 多选导出：只导出选中的会话，写入当前「导出位置」。 */
       const exportSelected = useCallback(
         async function () {
@@ -6085,6 +6419,7 @@ window.__ModuleLoader__.load({
               onFontSizeChange: changeFontSize,
               onImport: importConversations,
               onExport: exportConversations,
+              onExportOfficial: exportOfficial,
               onListDirectory: listDirectory,
               onChooseDir: chooseExportDir,
               onDeleteAll: deleteAllConversations,

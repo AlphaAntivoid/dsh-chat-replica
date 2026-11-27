@@ -62,6 +62,7 @@
 - 任意一条回答可「分叉」：把会话复制到该回答为止生成新会话（标题带「· 分叉」），方便换个方向继续；分叉不继承置顶
 - 用户消息可「编辑」并重新生成：保存后截断到该条、丢弃之后的内容（Ctrl/Cmd+Enter 保存，Esc 取消）
 - 单条会话可导出为 **Markdown** 阅读稿；JSON 仍用于备份与再导入
+- **导出也可选 DeepSeek 官方格式**：生成与 App 导出同结构的 ZIP（`manifest.json` / `user.json` / `chat_session_index.json` / `chat_sessions/<id>.json` + `_files/` 图片），本插件的导入能原样读回
 - **图片**：回形针可上传图片（自动缩放到最长边 1600px 后存进本地 IndexedDB），气泡里显示缩略图，点开是大图灯箱（Esc 关闭）；从 DeepSeek 导出 ZIP 导入的图片附件同样会显示
 - 右上角是常驻操作胶囊（查找 / 朗读 / 新对话）；侧栏开关与查找按钮的增减都走 `0.28s linear` 横向动画，开新对话时查找按钮会平滑收起
 - 侧边栏本身也是滑入 / 滑出的：宽度在 0 与 261px 之间以 0.28s linear 过渡，和胶囊的收缩同步
@@ -125,6 +126,26 @@
   - 顺序按 `parent_id` 链还原到 `current_message_id`：官方导出里回答的时间戳比提问早几毫秒，按时间排序会把每一对问答颠倒，所以不能用时间排；编辑 / 重新生成留下的废弃分支也不会导入
 
 同一份文件导入两次会被指纹去重；解析失败时状态栏会说明是「无法识别 ZIP」「不支持的压缩方式」还是「ZIP 里没有会话文件」。导入全程在本地完成，不经过网络。
+
+## 导出格式
+
+设置 → 数据管理 里有两种导出：
+
+- **导出历史对话**：默认 JSON（`{ "threads": [ ... ] }`），`格式` 选 Markdown 时写 `.md` 阅读稿
+- **导出 DeepSeek 格式**：生成 `deepseek_data-YYYY-MM-DD.zip`，目录结构与官方 App 导出一致：
+
+```
+manifest.json              { "export_format_version": 3 }
+user.json                  账号信息占位（本插件不保存账号）
+chat_session_index.json    [{ id, title, pinned, message_count, inserted_at, updated_at }]
+chat_sessions/<uuid>.json  { id, title, pinned, current_message_id, inserted_at, updated_at, messages }
+chat_sessions/<uuid>_files/ 附件与图片
+```
+
+- 消息按 `parent_id` 串成单链，`current_message_id` 指向最后一条；`REQUEST` / `RESPONSE` / `THINK` / `FILE` 片段与官方一致，`status` 写 `FINISHED`
+- 图片从本地图片库取出写进 `_files/`，文件名没有扩展名时按 MIME 补 `.png/.webp/...`
+- ZIP 在浏览器里组装（有 `CompressionStream` 时用 deflate，否则 stored），再交给 Host 写进「导出位置」
+- 这份 ZIP 可以被本插件的导入原样读回；实测把真实的 30 个会话（1056 条消息、154 张图）导出再导入，逐会话对比 0 差异
 
 ## 环境要求
 

@@ -3,6 +3,26 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.23.0
+
+### 中文
+
+- 新增「导出 DeepSeek 格式」：生成与官方 App 导出同结构的 ZIP（`manifest.json` / `user.json` / `chat_session_index.json` / `chat_sessions/<uuid>.json` + `_files/`），消息按 `parent_id` 串链、`current_message_id` 指向末条，片段用 `REQUEST` / `RESPONSE` / `THINK` / `FILE`
+- 图片从本地图片库写入 `_files/`；文件名缺扩展名时按 MIME 自动补 `.png/.webp/.gif/...`
+- 页面内组装 ZIP（有 `CompressionStream` 用 deflate，否则 stored），新增 Host 路由 `/chat-replica/export-official` 写入「导出位置」，文件名为 `deepseek_data-YYYY-MM-DD.zip`
+- 修复读取 ZIP 时只收固定扩展名导致「无扩展名附件」丢失的问题
+- 真实数据复验：30 个会话、1056 条消息、154 张图片导出再导入，逐会话对比 0 差异
+- 测试：228 条断言（官方格式导出 + 导入回环、扩展名补全、Host 写盘）
+
+### English
+
+- Added **Export DeepSeek format**: a ZIP laid out like the official app export (`manifest.json` / `user.json` / `chat_session_index.json` / `chat_sessions/<uuid>.json` plus `_files/`), with messages chained by `parent_id`, `current_message_id` pointing at the last one and `REQUEST` / `RESPONSE` / `THINK` / `FILE` fragments
+- Images are written from the local image store into `_files/`; names without an extension get one from the MIME type
+- The ZIP is assembled in the page (deflate when `CompressionStream` exists, stored otherwise) and a new Host route `/chat-replica/export-official` writes it into the export folder as `deepseek_data-YYYY-MM-DD.zip`
+- Fixed reading archives that only accepted fixed extensions, which dropped attachments whose names had none
+- Re-verified with real data: 30 conversations, 1056 messages and 154 images exported and imported back with zero per-conversation differences
+- Tests: 228 assertions (official-format export plus import round-trip, extension completion, Host write)
+
 ## 1.22.0
 
 ### 中文

@@ -231,6 +231,33 @@ async function main() {
     'no selection falls back to the default',
   );
 
+  // The official-format export route writes the page-built archive.
+  const officialDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-official-'));
+  const officialZip = Buffer.from([0x50, 0x4b, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const officialRequest = Readable.from([officialZip]);
+  officialRequest.method = 'POST';
+  officialRequest.url = '/chat-replica/export-official?dir=' + encodeURIComponent(officialDir);
+  const officialResponse = {
+    writableEnded: false,
+    writeHead(status, headers) {
+      this.statusCode = status;
+      this.headers = headers;
+    },
+    end(payload) {
+      this.writableEnded = true;
+      this.body = String(payload ?? '');
+    },
+  };
+  await routes[0].handler(officialRequest, officialResponse);
+  assert.equal(officialResponse.statusCode, 200, 'the official export answers 200: ' + officialResponse.body);
+  const officialResult = JSON.parse(officialResponse.body);
+  assert.ok(
+    /deepseek_data-\d{4}-\d{2}-\d{2}\.zip$/.test(officialResult.path),
+    'the archive is named like the official export',
+  );
+  assert.ok(fs.existsSync(officialResult.path), 'the official archive is written');
+  fs.rmSync(officialDir, { recursive: true, force: true });
+
   // The update check degrades to `{ ok: false }` on any failure.
   const release = await host.checkLatestRelease(async () => ({
     ok: true,

@@ -31,6 +31,7 @@ const SYSTEM_PROMPT = [
 const ROUTE_PREFIX = '/chat-replica';
 const MAX_CHAT_BODY = 4 * 1024 * 1024;
 const MAX_AUDIO_BODY = 8 * 1024 * 1024;
+const MAX_ARCHIVE_BODY = 96 * 1024 * 1024;
 
 /** Only the Web profile has an HTTP carrier, so stay inactive elsewhere. */
 export const inject = ['webServer'];
@@ -97,6 +98,11 @@ async function handle(req, res, ctx) {
   }
   if (url.pathname === `${ROUTE_PREFIX}/paths`) {
     sendJson(res, 200, { dirs: exportPaths() });
+    return;
+  }
+  if (url.pathname === `${ROUTE_PREFIX}/export-official`) {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'method' });
+    await exportOfficialArchive(req, res, url);
     return;
   }
   if (url.pathname === `${ROUTE_PREFIX}/export`) {
@@ -711,6 +717,42 @@ export function exportPaths() {
   ];
   if (isDirectory('/sdcard/Download')) entries.unshift({ id: 'androidDownload', path: '/sdcard/Download' });
   return entries.filter((entry) => isDirectory(entry.path));
+}
+
+/**
+ * Write a page-built DeepSeek-format ZIP archive into the export directory.
+ * The page composes the archive (it owns the image blobs); the Host only picks
+ * a writable folder, names the file like the official app and reports the path.
+ */
+async function exportOfficialArchive(req, res, url) {
+  let bytes;
+  try {
+    bytes = await readBody(req, MAX_ARCHIVE_BODY);
+  } catch (error) {
+    return sendJson(res, 413, { error: 'too-large', message: messageOf(error) });
+  }
+  if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+    return sendJson(res, 400, { error: 'not-zip' });
+  }
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, '0');
+  const name = `deepseek_data-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.zip`;
+  const requested = (url.searchParams.get('dir') || '').trim();
+  const candidates = exportCandidates(requested, isDirectory);
+  const failures = [];
+  for (const dir of candidates) {
+    const path = join(dir, name);
+    try {
+      await mkdir(dir, { recursive: true });
+      await writeFile(path, bytes);
+      logExport({ ok: true, path, name, dir, count: 0, bytes: bytes.length, requested, format: 'official' });
+      return sendJson(res, 200, { path, name, dir, bytes: bytes.length });
+    } catch (error) {
+      failures.push(`${dir}: ${messageOf(error)}`);
+    }
+  }
+  logExport({ ok: false, requested, failures, format: 'official' });
+  sendJson(res, 500, { error: 'write-failed', message: failures.join(' | ') });
 }
 
 /** Write the page's conversations next to the user's other downloads. */

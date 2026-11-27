@@ -1933,6 +1933,76 @@ async function main() {
     console.log('PASS 43: imported app images become thumbnails');
   }
 
+  /* --- 44. export in the official format and round-trip it ----------------- */
+  {
+    let captured = null;
+    const session = mount(undefined, {
+      fetch: async (url, init) => {
+        if (String(url).indexOf('/export-official') >= 0) {
+          captured = init && init.body ? new Uint8Array(init.body) : null;
+          return {
+            ok: true,
+            json: async () => ({ path: '/tmp/deepseek_data.zip' }),
+            text: async () => JSON.stringify({ path: '/tmp/deepseek_data.zip' }),
+          };
+        }
+        return { ok: true, json: async () => ({}), text: async () => '{}' };
+      },
+    });
+    let tree = renderPanel(session);
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
+    const image = new Blob([png], { type: 'image/png' });
+    image.name = '导出图';
+    byClass(tree, 'cd-file-input')[0].props.onChange({ target: { files: [image], value: '' } });
+    await wait(40);
+    tree = rerender();
+    click(byClass(tree, 'cd-send')[0]);
+    await wait(560);
+    tree = rerender();
+    click(byClass(tree, 'cd-settings')[0]);
+    tree = rerender();
+    const row = byClass(tree, 'cd-row').find((node) => textOf(node).indexOf('导出 DeepSeek 格式') >= 0);
+    assert(row, 'the data pane offers the official export');
+    click(byClass(row, 'cd-pill-btn')[0]);
+    await wait(150);
+    assert(
+      captured !== null && captured.length > 2 && captured[0] === 0x50 && captured[1] === 0x4b,
+      'the export produces a ZIP archive',
+    );
+
+    const other = mount({
+      'deepseek-chat-ui.threads.v1': JSON.stringify(
+        JSON.parse(session.storage.get('deepseek-chat-ui.threads.v1')).filter(
+          (thread) => !thread.messages.some((m) => m.images && m.images.length),
+        ),
+      ),
+    });
+    let tree2 = renderPanel(other);
+    click(byClass(tree2, 'cd-settings')[0]);
+    tree2 = rerender();
+    const modal = byClass(tree2, 'cd-modal')[0];
+    const buffer = captured.buffer.slice(captured.byteOffset, captured.byteOffset + captured.byteLength);
+    byClass(modal, 'cd-file-input')[0].props.onChange({
+      target: { files: [{ name: 'roundtrip.zip', arrayBuffer: async () => buffer }], value: '' },
+    });
+    await wait(150);
+    tree2 = rerender();
+    const saved = storedThreads(other.storage);
+    assert(saved && saved.length === 6, 'the archive imports back without duplicating history: ' + (saved ? saved.length : 'none'));
+    const status = byClass(tree2, 'cd-status')[0];
+    assert(
+      status && textOf(status).indexOf('跳过 5 个重复') >= 0,
+      'the round-trip recognizes the five known conversations: ' + (status ? textOf(status) : 'none'),
+    );
+    const withImage = saved.find((thread) => thread.messages.some((m) => m.images && m.images.length));
+    assert(withImage, 'the image message survives the round-trip');
+    assert(
+      withImage.messages[0].images[0].name.indexOf('导出图') >= 0,
+      'the image keeps its name through export and import',
+    );
+    console.log('PASS 44: export in the official format and round-trip it');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 

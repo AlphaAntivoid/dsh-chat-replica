@@ -64,6 +64,7 @@ Light theme:
 - Any answer can be forked: the conversation is copied up to that answer into a new one titled "· fork", so you can continue in another direction; pin state is not inherited
 - A user message can be edited and re-answered: saving truncates to that message and discards what follows (Ctrl/Cmd+Enter saves, Esc cancels)
 - A single conversation can be exported as a **Markdown** reading copy; JSON remains the backup and re-import format
+- **Exports can also use the official DeepSeek format**: a ZIP laid out like the app export (`manifest.json` / `user.json` / `chat_session_index.json` / `chat_sessions/<id>.json` plus `_files/` images), which this plugin's importer reads back unchanged
 - **Images**: the paperclip uploads images (downscaled to a 1600px long edge and stored in local IndexedDB); bubbles show thumbnails and clicking opens a lightbox (Esc closes). Images imported from a DeepSeek export ZIP are shown the same way
 - The top-right capsule is always there (find / read-aloud / new chat); both the sidebar toggle and the find button enter or leave with a `0.28s linear` horizontal animation, so starting a new chat collapses the find button smoothly
 - The sidebar itself slides too: its width transitions between 0 and 261px over 0.28s linear, in sync with the capsule
@@ -129,6 +130,26 @@ Settings → Data → Import history accepts two kinds of files:
   - Ordering follows the `parent_id` chain up to `current_message_id`: the export stamps an answer a few milliseconds *before* its question, so sorting by time would swap every pair; abandoned edit/regenerate branches are not imported
 
 Importing the same file twice is deduplicated by fingerprint, and a failed parse says whether the ZIP was unreadable, used an unsupported compression, or contained no conversations. Everything happens locally — nothing is uploaded.
+
+## Export formats
+
+Settings → Data offers two exports:
+
+- **Export history**: JSON by default (`{ "threads": [ ... ] }`), or a `.md` reading copy when the format is Markdown
+- **Export DeepSeek format**: writes `deepseek_data-YYYY-MM-DD.zip` with the official app's layout:
+
+```
+manifest.json              { "export_format_version": 3 }
+user.json                  account placeholders (this plugin stores no account)
+chat_session_index.json    [{ id, title, pinned, message_count, inserted_at, updated_at }]
+chat_sessions/<uuid>.json  { id, title, pinned, current_message_id, inserted_at, updated_at, messages }
+chat_sessions/<uuid>_files/ attachments and images
+```
+
+- Messages form a `parent_id` chain and `current_message_id` points at the last one; `REQUEST` / `RESPONSE` / `THINK` / `FILE` fragments match the official shape and `status` is `FINISHED`
+- Images are pulled from the local image store into `_files/`; when a name lacks an extension one is added from the MIME type
+- The ZIP is assembled in the page (deflate via `CompressionStream` when available, stored otherwise) and handed to the Host to write into the export folder
+- This archive imports back into the plugin unchanged; a real 30-conversation export (1056 messages, 154 images) round-tripped with zero per-conversation differences
 
 ## Requirements
 
