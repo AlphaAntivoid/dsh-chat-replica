@@ -1548,6 +1548,10 @@ async function main() {
     click(byClass(tree, 'cd-item')[0]);
     tree = rerender();
     assert(byClass(tree, 'cd-sider').length === 1, 'the sidebar starts open');
+    let wrap = byClass(tree, 'cd-sider-wrap')[0];
+    assert(wrap, 'the sidebar sits in an animated wrapper');
+    assert(String(wrap.props.className).indexOf('cd-sider-wrap-open') >= 0, 'the wrapper starts open');
+    assert(wrap.props['aria-hidden'] !== 'true', 'the open sidebar is exposed to assistive tech');
     let pill = byClass(tree, 'cd-pill')[0];
     assert(pill, 'the capsule is shown while the sidebar is open');
     const findOpen = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '查找')[0];
@@ -1566,21 +1570,24 @@ async function main() {
     assert(collapse, 'the sidebar offers a collapse action');
     click(collapse);
     tree = rerender();
-    assert(byClass(tree, 'cd-sider').length === 0, 'the sidebar is removed');
+    wrap = byClass(tree, 'cd-sider-wrap')[0];
+    assert(wrap, 'the sidebar wrapper stays mounted so it can slide out');
+    assert(String(wrap.props.className).indexOf('cd-sider-wrap-open') === -1, 'the wrapper collapses to width 0');
+    assert(wrap.props['aria-hidden'] === 'true', 'the hidden sidebar is removed from assistive tech');
     assert(byClass(tree, 'cd-header-pill').length === 1, 'the header switches to the collapsed pill');
     pill = byClass(tree, 'cd-pill')[0];
     assert(pill, 'the capsule stays collapsed or open');
     const expandOn = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '打开边栏')[0];
     assert(
       expandOn && String(expandOn.props.className).indexOf('cd-pill-expand-off') === -1,
-      'the sidebar toggle comes back when the sidebar closes',
+      'the sidebar toggle comes back in sync when the sidebar closes',
     );
     const findInPill = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '查找')[0];
     assert(findInPill, 'the find action stays in the capsule');
     click(findInPill);
     tree = rerender();
     assert(byClass(tree, 'cd-find').length === 1, 'the find bar opens from the capsule');
-    console.log('PASS 37: the capsule keeps find and animates the sidebar toggle');
+    console.log('PASS 37: the capsule keeps find and the sidebar slides in sync');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.19.0
+
+### 中文
+
+- 侧边栏改为「滑入 / 滑出」：外层新增 `.cd-sider-wrap`，宽度在 `0 ↔ 261px` 之间以 `0.28s linear` 过渡，收起时保持挂载所以能播完动画
+- 胶囊里「打开边栏」按钮的折叠与侧栏宽度用同一时长、同一缓动（两条规则由样式测试强制一致），两边同步收缩/展开
+- 收起后的侧栏容器加 `aria-hidden="true"` 与 `inert`，不会残留在 Tab 序列里
+- 测试：190 条断言（侧栏包裹层开合、与胶囊的同步类名切换、无障碍隐藏）；样式测试校验侧栏与胶囊的过渡时长一致
+
+### English
+
+- The sidebar now slides in and out: a new `.cd-sider-wrap` animates its width between `0` and `261px` with a `0.28s linear` transition and stays mounted while collapsed so the animation can finish
+- The capsule's "open sidebar" item collapses with the same duration and easing as the sidebar width (a stylesheet test enforces both), so the two move in sync
+- The collapsed wrapper is marked `aria-hidden="true"` and `inert`, so it leaves the tab order
+- Tests: 190 assertions (wrapper state, in-sync class toggles, assistive-tech hiding); the stylesheet test checks that sidebar and capsule transitions share one duration
+
 ## 1.18.1
 
 ### 中文

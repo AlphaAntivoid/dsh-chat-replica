@@ -135,6 +135,26 @@ if (!offRule || !/width:0/.test(offRule.body)) {
   failures.push('the hidden capsule toggle needs width:0 (.cd-pill-expand-off)');
 }
 
+/* 4. The sidebar wrapper must slide with the same linear duration as the
+ *    capsule toggle, so both movements stay in sync. */
+function widthTransitionMs(body) {
+  const match = /transition:\s*width\s+([\d.]+)(ms|s)\s+linear/.exec(body || '');
+  if (!match) return null;
+  return Number(match[1]) * (match[2] === 's' ? 1000 : 1);
+}
+const wrapRule = RULES.find((rule) => /\.cd-sider-wrap(?!-)/.test(rule.selector) && /transition:/.test(rule.body));
+const wrapOpen = RULES.find((rule) => /\.cd-sider-wrap-open/.test(rule.selector));
+if (!wrapOpen || !/width:261px/.test(wrapOpen.body)) {
+  failures.push('the open sidebar wrapper needs width:261px (.cd-sider-wrap-open)');
+}
+const capsuleMs = widthTransitionMs(transitionRule && transitionRule.body);
+const sidebarMs = widthTransitionMs(wrapRule && wrapRule.body);
+if (sidebarMs === null) {
+  failures.push('the sidebar wrapper needs a linear width transition (.cd-sider-wrap)');
+} else if (capsuleMs !== sidebarMs) {
+  failures.push('the sidebar and capsule width transitions must share one duration (' + sidebarMs + 'ms vs ' + capsuleMs + 'ms)');
+}
+
 if (failures.length > 0) {
   console.error('FAIL: stylesheet checks');
   for (const failure of failures) console.error('  - ' + failure);

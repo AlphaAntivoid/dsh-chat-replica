@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.18.1';
+    const PLUGIN_VERSION = '1.19.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -5369,7 +5369,17 @@ window.__ModuleLoader__.load({
           style: { '--cd-text-size': FONT_SIZES[fontSize] || FONT_SIZES.standard },
         },
         h('style', null, CSS),
-        wide && sidebarOpen ? h(Sider, siderProps) : null,
+        wide
+          ? h(
+              'div',
+              {
+                className: 'cd-sider-wrap' + (sidebarOpen ? ' cd-sider-wrap-open' : ''),
+                'aria-hidden': sidebarOpen ? undefined : 'true',
+                ...(sidebarOpen ? {} : { inert: true }),
+              },
+              h(Sider, siderProps),
+            )
+          : null,
         h(
           'div',
           { className: 'cd-main' },
@@ -5610,6 +5620,8 @@ window.__ModuleLoader__.load({
 @media (max-width:1023px){.cd-page{--cd-maxw:712px;--cd-pad:36px}}
 
 .cd-sider{box-sizing:border-box;display:flex;flex-direction:column;flex-shrink:0;width:261px;height:100%;padding:6px 12px 0;border-right:1px solid var(--dsw-alias-border-l1);background-color:var(--dsw-specific-sidebar-fill)}
+.cd-sider-wrap{flex:0 0 auto;width:0;height:100%;overflow:hidden;transition:width .28s linear}
+.cd-sider-wrap-open{width:261px}
 .cd-sider-mobile{width:300px;max-width:calc(100vw - 48px);box-shadow:0 12px 32px rgba(0,0,0,.18)}
 .cd-sider-top{box-sizing:border-box;display:flex;flex-shrink:0;align-items:center;justify-content:space-between;gap:8px;height:48px;margin-bottom:16px;padding:15px 0 10px 4px}
 .cd-brand{display:flex;align-items:center;gap:6px;min-width:0;color:var(--dsw-alias-brand-primary)}

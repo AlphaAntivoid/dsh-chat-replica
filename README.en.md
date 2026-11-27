@@ -65,6 +65,7 @@ Light theme:
 - A user message can be edited and re-answered: saving truncates to that message and discards what follows (Ctrl/Cmd+Enter saves, Esc cancels)
 - A single conversation can be exported as a **Markdown** reading copy; JSON remains the backup and re-import format
 - The top-right capsule is always there (find / read-aloud / new chat); collapsing the sidebar slides an "open sidebar" item in with a linear animation, and expanding it slides the item away
+- The sidebar itself slides too: its width transitions between 0 and 261px over 0.28s linear, in sync with the capsule
 - Find in a conversation: Ctrl/Cmd+F highlights matches, marks the current one solid, Enter / Shift+Enter jump, Esc closes
 - Model picker: the composer shows the current model; switch per provider or fall back to the default. The choice is stored locally and sent with each request; an unknown model falls back to the default
 - The settings footer can check for updates: it queries the latest GitHub release only when clicked and shows up-to-date / a new version (click again to open it) / a failed check
