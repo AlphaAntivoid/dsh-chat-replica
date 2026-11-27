@@ -1541,33 +1541,46 @@ async function main() {
     console.log('PASS 36: the context panel splits the prompt by origin');
   }
 
-  /* --- 37. the find action survives a collapsed sidebar -------------------- */
+  /* --- 37. the capsule keeps find and animates the sidebar toggle ---------- */
   {
     const session = mount();
     let tree = renderPanel(session);
     click(byClass(tree, 'cd-item')[0]);
     tree = rerender();
-    const collapse = collect(
-      tree,
-      (node) => node.kind === 'host' && node.props['aria-label'] === '收起边栏',
-    )[0];
+    assert(byClass(tree, 'cd-sider').length === 1, 'the sidebar starts open');
+    let pill = byClass(tree, 'cd-pill')[0];
+    assert(pill, 'the capsule is shown while the sidebar is open');
+    const findOpen = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '查找')[0];
+    assert(findOpen, 'the find action lives in the capsule when the sidebar is open');
+    assert(
+      collect(tree, (node) => node.kind === 'host' && node.props['aria-label'] === '查找').length === 1,
+      'the find action is not duplicated',
+    );
+    const expandOff = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '打开边栏')[0];
+    assert(
+      expandOff && String(expandOff.props.className).indexOf('cd-pill-expand-off') >= 0,
+      'the sidebar toggle collapses away while the sidebar is open',
+    );
+
+    const collapse = collect(tree, (node) => node.kind === 'host' && node.props['aria-label'] === '收起边栏')[0];
     assert(collapse, 'the sidebar offers a collapse action');
     click(collapse);
     tree = rerender();
     assert(byClass(tree, 'cd-sider').length === 0, 'the sidebar is removed');
     assert(byClass(tree, 'cd-header-pill').length === 1, 'the header switches to the collapsed pill');
-    const pill = byClass(tree, 'cd-pill')[0];
-    assert(pill, 'the floating capsule is rendered');
-    const findInPill = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '查找')[0];
-    assert(findInPill, 'the find action moves into the floating capsule');
+    pill = byClass(tree, 'cd-pill')[0];
+    assert(pill, 'the capsule stays collapsed or open');
+    const expandOn = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '打开边栏')[0];
     assert(
-      collect(tree, (node) => node.kind === 'host' && node.props['aria-label'] === '查找').length === 1,
-      'the find action is not duplicated',
+      expandOn && String(expandOn.props.className).indexOf('cd-pill-expand-off') === -1,
+      'the sidebar toggle comes back when the sidebar closes',
     );
+    const findInPill = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '查找')[0];
+    assert(findInPill, 'the find action stays in the capsule');
     click(findInPill);
     tree = rerender();
-    assert(byClass(tree, 'cd-find').length === 1, 'the find bar opens from the collapsed capsule');
-    console.log('PASS 37: the find action survives a collapsed sidebar');
+    assert(byClass(tree, 'cd-find').length === 1, 'the find bar opens from the capsule');
+    console.log('PASS 37: the capsule keeps find and animates the sidebar toggle');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.18.0
+
+### 中文
+
+- 右上角胶囊在侧栏展开时保留：查找 / 朗读 / 新对话；只有侧栏收起时才多出「打开边栏」按钮
+- 打开侧栏时该按钮以 `0.28s linear` 横向收起（宽度、透明度、间距同时过渡），胶囊整体变窄；关闭侧栏时反向展开
+- 标题栏不再单独放查找/朗读按钮，改为给胶囊预留右侧空间（展开 150px / 收起 188px）
+- 测试：185 条断言；样式测试新增「存在 linear 宽度过渡与 `width:0` 收起态」的校验
+
+### English
+
+- The top-right capsule now stays when the sidebar is open: find / read-aloud / new chat; the "open sidebar" item only appears while the sidebar is collapsed
+- Opening the sidebar collapses that item horizontally with a `0.28s linear` transition (width, opacity and gap together) and the capsule narrows; closing it expands again
+- The header no longer carries its own find/read-aloud buttons and instead reserves space for the capsule (150px open / 188px collapsed)
+- Tests: 185 assertions; the stylesheet test now checks the linear width transition and the `width:0` collapsed state
+
 ## 1.17.2
 
 ### 中文

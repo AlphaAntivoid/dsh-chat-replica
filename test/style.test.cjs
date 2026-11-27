@@ -114,6 +114,16 @@ if (duplicated.length > 0) {
   failures.push('classes with more than one base rule: ' + duplicated.join(', '));
 }
 
+/* 3. The capsule's sidebar toggle must shrink with a linear width transition. */
+const expandRule = CSS.match(/\.cd-pill-expand\{([^}]*)\}/);
+const offRule = CSS.match(/\.cd-pill\.cd-pill-expand-off[^{]*\{([^}]*)\}/) || CSS.match(/\.cd-pill-expand-off[^{]*\{([^}]*)\}/);
+if (!expandRule || !/transition:[^;}]*width[^;}]*linear/.test(expandRule[1])) {
+  failures.push('the capsule toggle needs a linear width transition (.cd-pill-expand)');
+}
+if (!offRule || !/width:0/.test(offRule[1])) {
+  failures.push('the hidden capsule toggle needs width:0 (.cd-pill-expand-off)');
+}
+
 if (failures.length > 0) {
   console.error('FAIL: stylesheet checks');
   for (const failure of failures) console.error('  - ' + failure);

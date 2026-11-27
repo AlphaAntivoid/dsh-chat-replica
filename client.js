@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.17.2';
+    const PLUGIN_VERSION = '1.18.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -4773,6 +4773,7 @@ window.__ModuleLoader__.load({
       );
 
       const collapsed = !wide || !sidebarOpen;
+      const sidebarVisible = wide ? sidebarOpen : drawerOpen;
       const hasMessages = !!activeThread && activeThread.messages.length > 0;
 
       const renderActions = function (message, extra) {
@@ -5372,62 +5373,64 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'cd-main' },
-          collapsed
-            ? h(
-                'div',
-                { className: 'cd-pill' },
-                h(
+          h(
+            'div',
+            { className: 'cd-pill' },
+            h(
+              'button',
+              {
+                type: 'button',
+                className:
+                  'cd-iconbtn cd-iconbtn-lg cd-pill-expand' +
+                  (sidebarVisible ? ' cd-pill-expand-off' : ''),
+                title: t('action.expand'),
+                'aria-label': t('action.expand'),
+                'aria-hidden': sidebarVisible ? 'true' : 'false',
+                tabIndex: sidebarVisible ? -1 : 0,
+                onClick: function () {
+                  if (wide) setSidebarOpen(true);
+                  else openDrawer();
+                },
+              },
+              h(Icon, { name: 'menu', size: 22, strokeWidth: 2 }),
+            ),
+            hasMessages
+              ? h(
                   'button',
                   {
                     type: 'button',
                     className: 'cd-iconbtn cd-iconbtn-lg',
-                    title: t('action.expand'),
-                    'aria-label': t('action.expand'),
-                    onClick: function () {
-                      if (wide) setSidebarOpen(true);
-                      else openDrawer();
-                    },
+                    title: t('find.open'),
+                    'aria-label': t('find.open'),
+                    onClick: openFind,
                   },
-                  h(Icon, { name: 'menu', size: 22, strokeWidth: 2 }),
-                ),
-                hasMessages
-                  ? h(
-                      'button',
-                      {
-                        type: 'button',
-                        className: 'cd-iconbtn cd-iconbtn-lg',
-                        title: t('find.open'),
-                        'aria-label': t('find.open'),
-                        onClick: openFind,
-                      },
-                      h(Icon, { name: 'search', size: 22, strokeWidth: 2 }),
-                    )
-                  : null,
-                h(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'cd-iconbtn cd-iconbtn-lg' + (autoRead ? ' cd-auto-read-on' : ''),
-                    title: t('settings.autoRead'),
-                    'aria-label': t('settings.autoRead'),
-                    'aria-pressed': autoRead ? 'true' : 'false',
-                    onClick: toggleAutoRead,
-                  },
-                  h(Icon, { name: autoRead ? 'volume' : 'volumeOff', size: 22, strokeWidth: 2 }),
-                ),
-                h(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'cd-iconbtn cd-iconbtn-lg',
-                    title: t('action.newChat'),
-                    'aria-label': t('action.newChat'),
-                    onClick: startNew,
-                  },
-                  h(Icon, { name: 'plus', size: 22, strokeWidth: 2 }),
-                ),
-              )
-            : null,
+                  h(Icon, { name: 'search', size: 22, strokeWidth: 2 }),
+                )
+              : null,
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'cd-iconbtn cd-iconbtn-lg' + (autoRead ? ' cd-auto-read-on' : ''),
+                title: t('settings.autoRead'),
+                'aria-label': t('settings.autoRead'),
+                'aria-pressed': autoRead ? 'true' : 'false',
+                onClick: toggleAutoRead,
+              },
+              h(Icon, { name: autoRead ? 'volume' : 'volumeOff', size: 22, strokeWidth: 2 }),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'cd-iconbtn cd-iconbtn-lg',
+                title: t('action.newChat'),
+                'aria-label': t('action.newChat'),
+                onClick: startNew,
+              },
+              h(Icon, { name: 'plus', size: 22, strokeWidth: 2 }),
+            ),
+          ),
           h(
             'header',
             { className: 'cd-header' + (collapsed ? ' cd-header-pill' : '') },
@@ -5446,33 +5449,6 @@ window.__ModuleLoader__.load({
               activeThread ? activeThread.title : t('app.name'),
             ),
             h('span', { className: 'cd-header-spacer' }),
-            collapsed || !hasMessages
-              ? null
-              : h(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'cd-iconbtn cd-iconbtn-sm',
-                    title: t('find.open'),
-                    'aria-label': t('find.open'),
-                    onClick: openFind,
-                  },
-                  h(Icon, { name: 'search', size: 18 }),
-                ),
-            collapsed
-              ? null
-              : h(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'cd-iconbtn cd-iconbtn-sm' + (autoRead ? ' cd-auto-read-on' : ''),
-                    title: t('settings.autoRead'),
-                    'aria-label': t('settings.autoRead'),
-                    'aria-pressed': autoRead ? 'true' : 'false',
-                    onClick: toggleAutoRead,
-                  },
-                  h(Icon, { name: autoRead ? 'volume' : 'volumeOff', size: 18 }),
-                ),
           ),
           h(
             'div',
@@ -5708,7 +5684,7 @@ window.__ModuleLoader__.load({
 .cd-sider-mobile .cd-settings-label{margin-left:10px;font-size:16px;line-height:22px}
 
 .cd-main{position:relative;box-sizing:border-box;display:flex;flex:1;flex-direction:column;min-width:0;min-height:0}
-.cd-header{box-sizing:border-box;display:flex;flex-shrink:0;align-items:center;height:60px;padding:12px 10px 0;background:var(--dsw-alias-bg-base)}
+.cd-header{box-sizing:border-box;display:flex;flex-shrink:0;align-items:center;height:60px;padding:12px 150px 0 10px;background:var(--dsw-alias-bg-base)}
 .cd-header-pill{padding-right:188px}
 @media (max-width:767px){.cd-header-pill{padding-left:64px}}
 .cd-header-title{max-width:480px;overflow:hidden;padding:8px 12px;border:none;border-radius:10px;background:transparent;font:500 14px/22px var(--dsw-font-family);color:var(--dsw-alias-label-primary);white-space:nowrap;text-overflow:ellipsis;cursor:pointer;text-align:left}
@@ -5717,6 +5693,9 @@ window.__ModuleLoader__.load({
 .cd-auto-read-on{color:var(--dsw-alias-brand-text)}
 .cd-act-on{color:var(--dsw-alias-brand-text)}
 .cd-pill{position:absolute;top:12px;right:16px;z-index:20;display:flex;align-items:center;gap:2px;height:48px;padding:0 4px;border:1px solid var(--dsw-alias-border-l2);border-radius:100px;background:var(--dsw-alias-bg-layer-3);box-shadow:0 4px 12px rgba(0,0,0,.04)}
+/* 展开侧栏时左侧「边栏」按钮横向线性收起，胶囊随之变窄 */
+.cd-pill-expand{overflow:hidden;transition:width .28s linear,opacity .28s linear,margin-right .28s linear}
+.cd-pill .cd-pill-expand-off{width:0;margin-right:-2px;opacity:0;pointer-events:none}
 .cd-body{display:flex;flex:1;flex-direction:column;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
 .cd-column{box-sizing:border-box;width:calc(var(--cd-maxw) - 2 * var(--cd-pad));max-width:calc(100% - 40px);margin:0 auto;padding-bottom:24px}
 .cd-welcome{box-sizing:border-box;display:flex;flex:1;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 16px}
