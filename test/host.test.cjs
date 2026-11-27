@@ -64,7 +64,9 @@ async function main() {
       return [{ id: provider + '-chat', name: 'DeepSeek Chat' }];
     },
     resolveModelInfo: async (provider, model) => {
-      if (provider === 'deepseek' && model === 'deepseek-chat') return { provider, id: model, name: 'DeepSeek Chat' };
+      if (provider === 'deepseek' && model === 'deepseek-chat') {
+        return { provider, id: model, name: 'DeepSeek Chat', context: { contextWindow: 128000 } };
+      }
       throw new Error('unknown model');
     },
   };
@@ -200,6 +202,7 @@ async function main() {
   assert.equal(catalog.providers.length, 1, 'only providers with a readable catalog are listed');
   assert.equal(catalog.providers[0].models[0].name, 'DeepSeek Chat', 'model names are listed');
   assert.equal(catalog.current.model, 'deepseek-chat', 'the current selection is reported');
+  assert.equal(catalog.current.contextWindow, 128000, 'the current route reports its context window');
 
   // An explicit selection wins only when the provider knows that model.
   assert.deepEqual(

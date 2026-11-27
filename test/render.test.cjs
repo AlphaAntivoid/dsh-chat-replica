@@ -1349,6 +1349,69 @@ async function main() {
     console.log('PASS 33: every surface exposes accessible names');
   }
 
+  /* --- 34. token usage and context occupancy ------------------------------- */
+  {
+    const session = mount(
+      {
+        'deepseek-chat-ui.threads.v1': JSON.stringify([
+          {
+            id: 't-usage',
+            title: '带用量的会话',
+            updatedAt: 1700000000000,
+            messages: [
+              { id: 'u1', role: 'user', text: '你好', at: 1700000000000 },
+              {
+                id: 'a1',
+                role: 'assistant',
+                text: '你好呀',
+                at: 1700000001000,
+                usage: { inputTokens: 1000, cacheReadTokens: 200, outputTokens: 356, reasoningTokens: 120 },
+              },
+            ],
+          },
+        ]),
+      },
+      {
+        fetch: async (url) => {
+          if (String(url).indexOf('/models') >= 0) {
+            return {
+              ok: true,
+              json: async () => ({
+                providers: [],
+                current: { provider: 'deepseek', model: 'deepseek-chat', contextWindow: 128000 },
+              }),
+              text: async () => '{}',
+            };
+          }
+          return { ok: true, json: async () => ({}), text: async () => '{}' };
+        },
+      },
+    );
+    let tree = renderPanel(session);
+    await wait(10);
+    tree = rerender();
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    const usage = byClass(tree, 'cd-turn-usage')[0];
+    assert(usage, 'the assistant turn shows token usage');
+    assert(
+      textOf(usage).trim() === '↑ 1.2K · ↓ 356',
+      'usage reads the billed input and output: ' + textOf(usage),
+    );
+    assert(
+      (usage.props.title || '').indexOf('缓存命中 17%') >= 0 || (usage.props.title || '').indexOf('缓存命中') >= 0,
+      'the usage tooltip breaks down the counters: ' + usage.props.title,
+    );
+    const meter = byClass(tree, 'cd-meter')[0];
+    assert(meter, 'the composer shows a context meter');
+    assert(textOf(meter).trim() === '1%', 'occupancy is used/contextWindow: ' + textOf(meter));
+    assert(
+      (meter.props['aria-label'] || '').indexOf('上下文 1%') === 0,
+      'the meter is announced with its reading: ' + meter.props['aria-label'],
+    );
+    console.log('PASS 34: token usage and context occupancy render');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 

@@ -159,6 +159,7 @@ async function chatStream(req, res, ctx) {
   }
 
   const selection = await resolveRequestSelection(llm, payload.model, fallback);
+  const profile = await modelProfile(llm, selection.provider, selection.model);
   const messages = toRequestMessages(payload.messages, selection.provider, selection.model);
   if (messages.length === 0) return sendJson(res, 400, { error: 'empty' });
 
@@ -179,7 +180,12 @@ async function chatStream(req, res, ctx) {
       /* the peer is gone; the abort below unwinds the model stream */
     }
   };
-  write({ type: 'model', provider: selection.provider, model: selection.model });
+  write({
+    type: 'model',
+    provider: selection.provider,
+    model: selection.model,
+    ...(profile.contextWindow === undefined ? {} : { contextWindow: profile.contextWindow }),
+  });
 
   const thinking = payload.thinking === true;
   const wantsSearch = payload.search === true;
@@ -189,7 +195,7 @@ async function chatStream(req, res, ctx) {
     searchContext = await runSearch(ctx, payload, write, abort.signal);
   }
 
-  const reasoning = await modelReasoning(llm, selection.provider, selection.model);
+  const reasoning = profile.reasoning;
   const effort = pickEffort(reasoning, selection, thinking);
 
   const options = {
@@ -307,8 +313,13 @@ export async function checkLatestRelease(fetcher = globalThis.fetch) {
  */
 export async function listModelCatalog(ctx) {
   const llm = ctx.get('llm');
-  const current = readSelection(ctx) ?? null;
+  const selection = readSelection(ctx) ?? null;
+  const current = selection === null ? null : Object.assign({}, selection);
   if (llm === undefined) return { providers: [], current };
+  if (current !== null) {
+    const profile = await modelProfile(llm, current.provider, current.model);
+    if (profile.contextWindow !== undefined) current.contextWindow = profile.contextWindow;
+  }
   let providers = [];
   try {
     providers = llm.listProviders();
@@ -494,24 +505,38 @@ function friendlyAsrError(text) {
 
 /* ---------------------------------------------------------- model + search */
 
-const reasoningCache = new Map();
+const modelProfileCache = new Map();
 
-/** Cached capability lookup: which reasoning efforts this exact route accepts. */
-async function modelReasoning(llm, provider, model) {
+/**
+ * Cached capability lookup for one exact route: reasoning efforts and the
+ * context window. The page asks on the catalog and on every chat request, so
+ * the resolution is memoized per provider/model.
+ *
+ * @param llm - Host `llm` service.
+ * @param provider - provider id.
+ * @param model - model id.
+ * @returns `{ reasoning, contextWindow }`; both may be null/undefined.
+ */
+async function modelProfile(llm, provider, model) {
   const key = `${provider}\u0000${model}`;
-  if (reasoningCache.has(key)) return reasoningCache.get(key);
-  let reasoning = null;
+  if (modelProfileCache.has(key)) return modelProfileCache.get(key);
+  const profile = { reasoning: null, contextWindow: undefined };
   try {
     const info = await llm.resolveModelInfo(provider, model);
     const declared = info?.reasoning;
     if (declared !== undefined && declared !== null && Array.isArray(declared.efforts)) {
-      reasoning = { efforts: declared.efforts.map((effort) => effort.id), defaultEffort: declared.defaultEffort ?? null };
+      profile.reasoning = {
+        efforts: declared.efforts.map((effort) => effort.id),
+        defaultEffort: declared.defaultEffort ?? null,
+      };
     }
+    const window = info?.context?.contextWindow;
+    if (Number.isInteger(window) && window > 0) profile.contextWindow = window;
   } catch {
-    reasoning = null;
+    /* the route or its metadata is unavailable */
   }
-  reasoningCache.set(key, reasoning);
-  return reasoning;
+  modelProfileCache.set(key, profile);
+  return profile;
 }
 
 /**

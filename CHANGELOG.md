@@ -3,6 +3,24 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.15.0
+
+### 中文
+
+- 新增与 DSH 一致的用量展示：每条回答下方一行 `↑ 计费输入 · ↓ 输出`，悬停可看缓存命中与推理 token
+- 输入框右侧新增上下文占用圆环（百分比），悬停显示 `约 已用 / 窗口`；数据来自 `usage` 帧与本轮 `model` 帧的 `contextWindow`
+- Host 的 `{type:'model'}` 帧与 `/models` 的 `current` 现在都带上 `resolveModelInfo().context.contextWindow`；能力查询按 provider/model 缓存
+- 新消息的 usage 会随会话一起保存在 `localStorage`，重新进入仍可见
+- 测试：160 条断言（Host 校验窗口透传，渲染校验用量文本、缓存命中与占用百分比）
+
+### English
+
+- Added DSH-style usage: every answer ends with `↑ billed input · ↓ output`, with cache-hit and reasoning tokens in the tooltip
+- The composer now shows a context-occupancy ring (percentage); hovering reveals `~used / window`. It is fed by the `usage` frames and this turn's `model` frame
+- The Host's `{type:'model'}` frame and `/models`' `current` now carry `resolveModelInfo().context.contextWindow`; capability lookups are cached per provider/model
+- Usage is persisted with the conversation in `localStorage`, so it survives a reload
+- Tests: 160 assertions (Host checks the window pass-through; render checks the usage text, cache hit and occupancy percent)
+
 ## 1.14.1
 
 ### 中文

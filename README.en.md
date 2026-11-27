@@ -31,6 +31,12 @@ Find in a conversation: press Ctrl/Cmd+F, matches are highlighted, and the curre
 
 ![Find in conversation](media/screenshots/find-dark.png)
 
+Usage mirrors DSH: every answer ends with this turn's `↑ billed input · ↓ output` (hover for cache hit and
+reasoning tokens), and the ring on the right of the composer shows context occupancy (hover for
+`~used / window`).
+
+![Usage and context](media/screenshots/usage-dark.png)
+
 Model picker: the composer shows the current model; open it to switch between providers, or go back to the default.
 
 ![Model picker](media/screenshots/model-dark.png)
@@ -56,6 +62,7 @@ Light theme:
 - Find in a conversation: Ctrl/Cmd+F highlights matches, marks the current one solid, Enter / Shift+Enter jump, Esc closes
 - Model picker: the composer shows the current model; switch per provider or fall back to the default. The choice is stored locally and sent with each request; an unknown model falls back to the default
 - The settings footer can check for updates: it queries the latest GitHub release only when clicked and shows up-to-date / a new version (click again to open it) / a failed check
+- Usage matches DSH: every answer ends with this turn's `↑ billed input · ↓ output`, the composer ring shows context occupancy, and hovering reveals cache-hit and reasoning tokens
 - Message bubbles, welcome screen, composer, Markdown (headings / lists / inline code / code blocks) and a collapsible "Thought" block
 - Upload text files, voice input, send / stop on the right of the composer
 - "Deep thinking" maps to the model's reasoningEffort (on = max, off = off; levels come from the model declaration)
@@ -209,6 +216,10 @@ Restart DSH to take effect. To uninstall, remove that insert and the
    browser reports "Failed to fetch". The "export folder" row uses `uiWorkspace.listDirectory()` for the built-in
    file browser and stores the choice in `deepseek-chat-ui.export-dir.v1`. Import reads the same shape (a bare
    array is accepted too).
+8. Usage: `llm.stream`'s `usage` chunk becomes a `{type:'usage', usage}` frame and the page stores it on that
+   answer; the `{type:'model'}` frame carries `resolveModelInfo().context.contextWindow` (the `current` entry of
+   `/models` carries it too), and the page draws the context ring from "last billed input + this turn's output ÷
+   window".
 
 ## Privacy
 
@@ -229,6 +240,8 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 - A full localStorage is surfaced as a "local storage is full" toast instead of silently dropping changes
 - A render failure shows a fallback inside this panel (with retry) instead of blanking the whole page
 - Only a single conversation can be exported as Markdown; bulk export and import still use JSON
+- Context occupancy is an **approximation**: last billed input plus this turn's output, divided by the route's
+  declared window. DSH has a token-meter pressure projection; this plugin has no equivalent live sampling
 
 ## Visual origin
 

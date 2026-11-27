@@ -30,6 +30,11 @@
 
 ![会话内查找](media/screenshots/find-dark.png)
 
+用法用量与 DSH 一致：每条回答下方显示本轮 `↑ 计费输入 · ↓ 输出`（悬停看缓存命中与推理 token），
+输入框右侧的圆环显示上下文占用百分比（悬停看 `约已用 / 窗口`）。
+
+![用量与上下文](media/screenshots/usage-dark.png)
+
 模型选择：输入框下方显示当前模型，点开按 provider 分组切换，也可以切回「跟随默认」。
 
 ![模型选择](media/screenshots/model-dark.png)
@@ -55,6 +60,7 @@
 - 会话内查找：`Ctrl/Cmd+F`，命中词高亮、当前命中实色，回车 / Shift+回车上下跳转，Esc 关闭
 - 模型选择：输入框下方显示当前模型，按 provider 分组切换，可切回「跟随默认」；选择存本地并随请求发送，Host 校验失败会回退默认
 - 设置页脚可「检查更新」：点一下才联网查询 GitHub 最新 Release，显示已是最新 / 新版本（再点打开 Release 页）/ 检查失败
+- 用量展示与 DSH 对齐：每条回答下方是本轮 `↑ 计费输入 · ↓ 输出`，输入框右侧圆环是上下文占用；悬停可看缓存命中与推理 token
 - 消息气泡、欢迎语、输入框，Markdown（标题 / 列表 / 行内代码 / 代码块）与「已思考」折叠块
 - 输入框右侧：📎 上传文本文件、🎤 语音输入、发送 / 停止
 - 「深度思考」映射到模型的 reasoningEffort（开 = max，关 = off，档位取自模型声明）
@@ -194,6 +200,9 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
    导致浏览器报「Failed to fetch」。
    页面里的「导出位置」用 `uiWorkspace.listDirectory()` 做内置文件浏览，选择结果存在
    `deepseek-chat-ui.export-dir.v1`。导入读同一格式（也接受裸数组）。
+8. 用量：`llm.stream` 的 `usage` 分片原样转成 `{type:'usage', usage}` 帧，页面把它存进对应回答；
+   `{type:'model'}` 帧带上 `resolveModelInfo().context.contextWindow`（`/models` 的 `current` 也会带），
+   页面用「上一次计费输入 + 本轮输出 ÷ 窗口」画上下文圆环。
 
 ## 隐私
 
@@ -213,6 +222,7 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
 - 面板渲染异常时只显示这一块的兜底页（带重试），不会整页白屏
 - 「删除」只有 8 秒撤销窗口（提示条上的「撤销」）；超时，或期间再次删除其他会话会覆盖撤销快照，之后不可恢复
 - Markdown 导出目前只支持单条会话；批量导出与导入仍使用 JSON
+- 上下文占用是**近似值**：上一次计费输入 + 本轮输出，除以 route 声明的窗口；DSH 那边有 token-meter 的压力投影，这里没有等价的实时采样
 
 ## 复刻来源
 

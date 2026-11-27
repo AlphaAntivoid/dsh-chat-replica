@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.14.1';
+    const PLUGIN_VERSION = '1.15.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -26,6 +26,60 @@ window.__ModuleLoader__.load({
     const STORE_TTS = 'deepseek-chat-ui.tts.v1';
     const STORE_FONT = 'deepseek-chat-ui.font.v1';
     const STORE_MODEL = 'deepseek-chat-ui.model.v1';
+    const STORE_CONTEXT_WINDOW = 'deepseek-chat-ui.context-window.v1';
+
+    /** 上一次已知的上下文窗口；只在拿不到实时值时兜底展示。 */
+    function loadContextWindow() {
+      try {
+        const raw = window.localStorage.getItem(STORE_CONTEXT_WINDOW);
+        const value = raw === null ? NaN : Number(raw);
+        return Number.isFinite(value) && value > 0 ? value : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function saveContextWindow(value) {
+      try {
+        if (typeof value === 'number' && value > 0) {
+          window.localStorage.setItem(STORE_CONTEXT_WINDOW, String(value));
+        }
+      } catch (error) {
+        /* ignore quota errors */
+      }
+    }
+
+    /** 与 DSH 一致的紧凑计数：999、1.2K、12K、1.2M。 */
+    function formatTokenCount(value) {
+      const count = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+      if (count < 1000) return String(count);
+      if (count < 1000000) {
+        const scaled = count / 1000;
+        return (scaled >= 100 ? String(Math.round(scaled)) : String(Math.round(scaled * 10) / 10)) + 'K';
+      }
+      const scaled = count / 1000000;
+      return (scaled >= 100 ? String(Math.round(scaled)) : String(Math.round(scaled * 10) / 10)) + 'M';
+    }
+
+    /** 计费输入 = 未缓存输入 + 缓存读取 + 缓存写入（三者互不重叠）。 */
+    function billedInputTokens(usage) {
+      if (!usage || typeof usage !== 'object') return 0;
+      const input = Number(usage.inputTokens) || 0;
+      const read = Number(usage.cacheReadTokens) || 0;
+      const write = Number(usage.cacheWriteTokens) || 0;
+      return input + read + write;
+    }
+
+    /** 一轮的上行/下行计数；缺 usage 时返回 null。 */
+    function usageTotals(usage) {
+      if (!usage || typeof usage !== 'object') return null;
+      const input = billedInputTokens(usage);
+      const output = Number(usage.outputTokens) || 0;
+      if (input === 0 && output === 0) return null;
+      const reasoning = Number(usage.reasoningTokens) || 0;
+      const cacheHit = input === 0 ? null : Math.round(((Number(usage.cacheReadTokens) || 0) / input) * 100);
+      return { input: input, output: output, reasoning: reasoning, cacheHit: cacheHit };
+    }
 
     /** 聊天用的模型选择；null 表示跟随 DSH 的默认模型。 */
     function loadModelChoice() {
@@ -213,6 +267,11 @@ window.__ModuleLoader__.load({
       'update.latestShort': '已是最新',
       'update.availableShort': '新版本 v{version}',
       'update.failedShort': '检查失败',
+      'usage.context': '上下文 {percent}%（约 {used} / {window} tokens）',
+      'usage.input': '未缓存输入',
+      'usage.output': '输出',
+      'usage.reasoning': '推理',
+      'usage.cacheHit': '缓存命中',
       'rename.title': '重命名对话',
       'rename.field': '对话标题',
       'rename.save': '保存',
@@ -380,6 +439,11 @@ window.__ModuleLoader__.load({
       'update.latestShort': 'Up to date',
       'update.availableShort': 'v{version} available',
       'update.failedShort': 'Check failed',
+      'usage.context': 'Context {percent}% (~{used} / {window} tokens)',
+      'usage.input': 'Uncached input',
+      'usage.output': 'Output',
+      'usage.reasoning': 'Reasoning',
+      'usage.cacheHit': 'Cache hit',
       'rename.title': 'Rename conversation',
       'rename.field': 'Conversation title',
       'rename.save': 'Save',
@@ -3061,6 +3125,49 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'cd-right' },
+            props.contextOccupancy
+              ? h(
+                  'span',
+                  {
+                    className: 'cd-meter',
+                    role: 'img',
+                    'aria-label': t('usage.context')
+                      .replace('{percent}', String(props.contextOccupancy.percent))
+                      .replace('{used}', formatTokenCount(props.contextOccupancy.used))
+                      .replace('{window}', formatTokenCount(props.contextOccupancy.window)),
+                    title: t('usage.context')
+                      .replace('{percent}', String(props.contextOccupancy.percent))
+                      .replace('{used}', formatTokenCount(props.contextOccupancy.used))
+                      .replace('{window}', formatTokenCount(props.contextOccupancy.window)),
+                  },
+                  h(
+                    'svg',
+                    { viewBox: '0 0 14 14', width: 14, height: 14, 'aria-hidden': 'true' },
+                    h('circle', {
+                      cx: 7,
+                      cy: 7,
+                      r: 5.5,
+                      fill: 'none',
+                      stroke: 'currentColor',
+                      strokeWidth: 2,
+                      opacity: 0.25,
+                    }),
+                    h('circle', {
+                      cx: 7,
+                      cy: 7,
+                      r: 5.5,
+                      fill: 'none',
+                      stroke: 'currentColor',
+                      strokeWidth: 2,
+                      strokeLinecap: 'round',
+                      strokeDasharray:
+                        (2 * Math.PI * 5.5 * props.contextOccupancy.percent) / 100 + ' ' + 2 * Math.PI * 5.5,
+                      transform: 'rotate(-90 7 7)',
+                    }),
+                  ),
+                  h('span', null, props.contextOccupancy.percent + '%'),
+                )
+              : null,
             h(
               'button',
               {
@@ -3204,6 +3311,10 @@ window.__ModuleLoader__.load({
       });
       const [modelCatalog, setModelCatalog] = useState({ providers: [], current: null });
       const [modelMenu, setModelMenu] = useState(false);
+      /** 当前 route 的上下文窗口；来自 /models 的 current 或每轮 chat 的 model 帧。 */
+      const [contextWindow, setContextWindow] = useState(function () {
+        return loadContextWindow();
+      });
 
       const bodyRef = useRef(null);
       const findInputRef = useRef(null);
@@ -3331,6 +3442,35 @@ window.__ModuleLoader__.load({
       );
       const findActive = findMatches.length === 0 ? -1 : Math.min(findIndex, findMatches.length - 1);
 
+      /** 本会话最后一次用到的 token 计数；用于上下文占用与「用量」行。 */
+      const activeUsage = useMemo(
+        function () {
+          if (!activeThread) return null;
+          for (let index = activeThread.messages.length - 1; index >= 0; index -= 1) {
+            const message = activeThread.messages[index];
+            if (message.role === 'assistant' && message.usage) {
+              const totals = usageTotals(message.usage);
+              if (totals !== null) return totals;
+            }
+          }
+          return null;
+        },
+        [activeThread],
+      );
+      /** 近似上下文占用：上一次计费输入 + 本轮输出，占 route 声明的窗口。 */
+      const occupancy = useMemo(
+        function () {
+          if (contextWindow === null || activeUsage === null) return null;
+          const used = activeUsage.input + activeUsage.output;
+          return {
+            used: used,
+            window: contextWindow,
+            percent: Math.min(100, Math.round((used / contextWindow) * 100)),
+          };
+        },
+        [contextWindow, activeUsage],
+      );
+
       const closeFind = useCallback(function () {
         setFindOpen(false);
         setFindQuery('');
@@ -3344,6 +3484,10 @@ window.__ModuleLoader__.load({
           const body = await response.json();
           if (body && Array.isArray(body.providers)) {
             setModelCatalog({ providers: body.providers, current: body.current || null });
+            if (body.current && typeof body.current.contextWindow === 'number' && body.current.contextWindow > 0) {
+              setContextWindow(body.current.contextWindow);
+              saveContextWindow(body.current.contextWindow);
+            }
           }
         } catch (error) {
           /* keep the catalog we already have */
@@ -3837,6 +3981,15 @@ window.__ModuleLoader__.load({
                       },
                     };
                   });
+                } else if (frame.type === 'usage') {
+                  patchMessage(threadId, assistantId, function () {
+                    return { usage: frame.usage || null };
+                  });
+                } else if (frame.type === 'model') {
+                  if (typeof frame.contextWindow === 'number' && frame.contextWindow > 0) {
+                    setContextWindow(frame.contextWindow);
+                    saveContextWindow(frame.contextWindow);
+                  }
                 } else if (frame.type === 'error') {
                   patchMessage(threadId, assistantId, function () {
                     return { error: frame.message || t('toast.network') };
@@ -4839,6 +4992,7 @@ window.__ModuleLoader__.load({
             }
             const streaming = pending && last && last.id === message.id;
             const waiting = streaming && message.text === '' && !message.reasoning && !message.search;
+            const turnUsage = usageTotals(message.usage);
             return h(
               'div',
               { key: message.id, className: 'cd-assistant' + hitClass(message), 'data-mid': message.id },
@@ -4887,6 +5041,22 @@ window.__ModuleLoader__.load({
                   )
                 : null,
               message.stopped ? h('div', { className: 'cd-stopped' }, t('stopped')) : null,
+              turnUsage === null
+                ? null
+                : h(
+                    'div',
+                    {
+                      className: 'cd-turn-usage',
+                      title:
+                        t('usage.input') + ' ' + formatTokenCount(turnUsage.input) +
+                        (turnUsage.cacheHit === null ? '' : ' · ' + t('usage.cacheHit') + ' ' + turnUsage.cacheHit + '%') +
+                        ' · ' + t('usage.output') + ' ' + formatTokenCount(turnUsage.output) +
+                        (turnUsage.reasoning > 0
+                          ? ' · ' + t('usage.reasoning') + ' ' + formatTokenCount(turnUsage.reasoning)
+                          : ''),
+                    },
+                    '↑ ' + formatTokenCount(turnUsage.input) + ' · ↓ ' + formatTokenCount(turnUsage.output),
+                  ),
               streaming || message.error
                 ? null
                 : renderActions(
@@ -5110,6 +5280,7 @@ window.__ModuleLoader__.load({
                   setModelMenu(true);
                   loadModels();
                 },
+                contextOccupancy: occupancy,
                 home: !hasMessages,
                 textareaRef: textareaRef,
                 attachments: attachments,
@@ -5497,6 +5668,10 @@ mark.cd-mark{padding:0 1px;border-radius:3px;background:color-mix(in srgb,var(--
 .cd-model-menu{position:absolute;left:10px;bottom:calc(100% - 4px);z-index:31;box-sizing:border-box;display:flex;flex-direction:column;width:250px;max-height:min(420px,72vh);overflow-y:auto;padding:5px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-overlay,var(--dsw-alias-bg-layer-2));box-shadow:0 16px 40px rgba(0,0,0,.28);pointer-events:auto}
 .cd-model-group{padding:8px 10px 4px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;letter-spacing:.02em}
 .cd-model-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cd-meter{display:inline-flex;flex-shrink:0;align-items:center;gap:4px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;font-variant-numeric:tabular-nums}
+.cd-meter svg{display:block;flex-shrink:0}
+.cd-turn-usage{display:flex;justify-content:flex-end;margin-top:4px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;font-variant-numeric:tabular-nums}
+.cd-usage{margin-right:2px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .cd-delete-actions{display:flex;gap:10px;margin-top:22px}
 .cd-confirm-pill{display:inline-flex;flex:1;align-items:center;justify-content:center;height:40px;padding:0 14px;border:none;border-radius:999px;font-family:inherit;font-size:14px;font-weight:500;line-height:20px;white-space:nowrap;cursor:pointer;transition:background-color .15s,opacity .15s}
 .cd-confirm-pill:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
