@@ -1541,6 +1541,29 @@ async function main() {
     console.log('PASS 36: the context panel splits the prompt by origin');
   }
 
+  /* --- 37. the find action survives a collapsed sidebar -------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    const collapse = collect(
+      tree,
+      (node) => node.kind === 'host' && node.props['aria-label'] === '收起边栏',
+    )[0];
+    assert(collapse, 'the sidebar offers a collapse action');
+    click(collapse);
+    tree = rerender();
+    assert(byClass(tree, 'cd-sider').length === 0, 'the sidebar is removed');
+    assert(byClass(tree, 'cd-header-pill').length === 1, 'the header switches to the collapsed pill');
+    const find = collect(tree, (node) => node.kind === 'host' && node.props['aria-label'] === '查找')[0];
+    assert(find, 'the find action stays available when the sidebar is closed');
+    click(find);
+    tree = rerender();
+    assert(byClass(tree, 'cd-find').length === 1, 'the find bar opens from the collapsed header');
+    console.log('PASS 37: the find action survives a collapsed sidebar');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 

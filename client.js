@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.17.0';
+    const PLUGIN_VERSION = '1.17.1';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -5424,7 +5424,7 @@ window.__ModuleLoader__.load({
               activeThread ? activeThread.title : t('app.name'),
             ),
             h('span', { className: 'cd-header-spacer' }),
-            collapsed || !hasMessages
+            !hasMessages
               ? null
               : h(
                   'button',

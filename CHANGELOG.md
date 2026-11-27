@@ -3,6 +3,18 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.17.1
+
+### 中文
+
+- 修复：收起侧边栏后，标题栏里的「查找」按钮会消失。现在只要会话里有消息就保留该按钮（收起状态下的胶囊标题栏同样可用），`Ctrl/Cmd+F` 也一直有效
+- 渲染测试新增「收起边栏后查找仍可用」：收起 → 断言侧栏移除、标题变胶囊、查找按钮存在且能打开查找条
+
+### English
+
+- Fixed: collapsing the sidebar removed the find button from the header. It now stays whenever the conversation has messages (including the collapsed pill header), and `Ctrl/Cmd+F` keeps working
+- Added a render test for it: collapse → sidebar removed, pill header, find button present and able to open the find bar
+
 ## 1.17.0
 
 ### 中文
