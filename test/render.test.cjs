@@ -385,6 +385,8 @@ function mount(storageSeed, options) {
       : async () => ({ ok: true, json: async () => ({}), text: async () => '{}' }),
     Blob,
     AbortController,
+    TextDecoder,
+    TextEncoder,
     URL,
     navigator: {},
   };
@@ -494,6 +496,59 @@ function storedThreads(storage) {
 }
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Build a minimal stored-entry ZIP so the official-export importer can be tested. */
+function makeStoredZip(entries) {
+  const encoder = new TextEncoder();
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const nameBytes = encoder.encode(entry.name);
+    const data = encoder.encode(entry.text);
+    const local = new Uint8Array(30 + nameBytes.length);
+    const localView = new DataView(local.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0x0800, true);
+    localView.setUint32(18, data.length, true);
+    localView.setUint32(22, data.length, true);
+    localView.setUint16(26, nameBytes.length, true);
+    local.set(nameBytes, 30);
+    parts.push(local, data);
+
+    const record = new Uint8Array(46 + nameBytes.length);
+    const recordView = new DataView(record.buffer);
+    recordView.setUint32(0, 0x02014b50, true);
+    recordView.setUint16(4, 20, true);
+    recordView.setUint16(6, 20, true);
+    recordView.setUint16(8, 0x0800, true);
+    recordView.setUint16(10, 0, true);
+    recordView.setUint32(20, data.length, true);
+    recordView.setUint32(24, data.length, true);
+    recordView.setUint16(28, nameBytes.length, true);
+    recordView.setUint32(42, offset, true);
+    record.set(nameBytes, 46);
+    central.push(record);
+    offset += local.length + data.length;
+  }
+  const centralSize = central.reduce((sum, record) => sum + record.length, 0);
+  const eocd = new Uint8Array(22);
+  const eocdView = new DataView(eocd.buffer);
+  eocdView.setUint32(0, 0x06054b50, true);
+  eocdView.setUint16(8, entries.length, true);
+  eocdView.setUint16(10, entries.length, true);
+  eocdView.setUint32(12, centralSize, true);
+  eocdView.setUint32(16, offset, true);
+  const total = new Uint8Array(offset + centralSize + 22);
+  let cursor = 0;
+  for (const part of parts.concat(central)) {
+    total.set(part, cursor);
+    cursor += part.length;
+  }
+  total.set(eocd, cursor);
+  return total.buffer;
+}
 
 async function main() {
   /* --- 1. every row carries a three-dot menu ------------------------------ */
@@ -1627,6 +1682,94 @@ async function main() {
       'the find slot expands again once the conversation has history',
     );
     console.log('PASS 38: capsule slots animate whenever the conversation changes');
+  }
+
+  /* --- 39. import a DeepSeek app export ZIP -------------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-settings')[0]);
+    tree = rerender();
+    const modal = byClass(tree, 'cd-modal')[0];
+    const input = byClass(modal, 'cd-file-input')[0];
+    const official = {
+      id: 'session-app-1',
+      title: '来自 App 的会话',
+      pinned: true,
+      inserted_at: '2026-01-02T03:04:05.000Z',
+      updated_at: '2026-01-02T03:05:00.000Z',
+      messages: [
+        {
+          id: 1,
+          parent_id: null,
+          role: 'USER',
+          inserted_at: '2026-01-02T03:04:05.000Z',
+          fragments: [{ type: 'REQUEST', content: '你好，App' }],
+        },
+        {
+          id: 2,
+          parent_id: 1,
+          role: 'ASSISTANT',
+          inserted_at: '2026-01-02T03:04:10.000Z',
+          fragments: [
+            { type: 'THINK', content: '先想一想' },
+            { type: 'RESPONSE', content: '你好，这是回答' },
+            { type: 'FILE', files: [{ file_name: 'photo.webp', is_image: true }] },
+          ],
+        },
+      ],
+    };
+    const archive = makeStoredZip([
+      { name: 'manifest.json', text: JSON.stringify({ export_format_version: 3 }) },
+      { name: 'chat_sessions/session-app-1.json', text: JSON.stringify(official) },
+    ]);
+    input.props.onChange({
+      target: {
+        files: [{ name: 'deepseek_data-2026-01-02.zip', arrayBuffer: async () => archive }],
+        value: '',
+      },
+    });
+    await wait(80);
+    tree = rerender();
+    assert(byClass(tree, 'cd-item').length === 6, 'the official export adds one conversation');
+    const saved = storedThreads(session.storage);
+    const imported = saved.find((thread) => thread.title === '来自 App 的会话');
+    assert(imported, 'the official session title is kept');
+    assert(imported.pinnedAt === Date.parse('2026-01-02T03:04:05.000Z'), 'the pinned flag survives');
+    assert(imported.updatedAt === Date.parse('2026-01-02T03:05:00.000Z'), 'the updated time survives');
+    assert(imported.messages.length === 2, 'both turns are imported');
+    assert(imported.messages[0].text === '你好，App', 'the REQUEST fragment becomes the user text');
+    assert(imported.messages[1].text === '你好，这是回答', 'the RESPONSE fragment becomes the answer');
+    assert(imported.messages[1].reasoning === '先想一想', 'the THINK fragment becomes the reasoning block');
+    assert(
+      imported.messages[1].files && imported.messages[1].files[0].name === 'photo.webp',
+      'the FILE fragment becomes an attachment chip',
+    );
+    console.log('PASS 39: a DeepSeek app export ZIP imports');
+  }
+
+  /* --- 40. a broken ZIP reports a readable reason -------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-settings')[0]);
+    tree = rerender();
+    const modal = byClass(tree, 'cd-modal')[0];
+    const input = byClass(modal, 'cd-file-input')[0];
+    input.props.onChange({
+      target: {
+        files: [{ name: 'broken.zip', arrayBuffer: async () => new ArrayBuffer(64) }],
+        value: '',
+      },
+    });
+    await wait(40);
+    tree = rerender();
+    const status = byClass(tree, 'cd-status')[0];
+    assert(
+      status && textOf(status).indexOf('无法识别这个 ZIP') >= 0,
+      'a broken archive reports the readable reason: ' + (status ? textOf(status) : 'none'),
+    );
+    console.log('PASS 40: a broken ZIP reports a readable reason');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.20.0';
+    const PLUGIN_VERSION = '1.21.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -188,7 +188,7 @@ window.__ModuleLoader__.load({
       'settings.change': '更改',
       'settings.delete': '删除',
       'settings.import': '导入历史对话',
-      'settings.importHint': '选择导出的 JSON 文件',
+      'settings.importHint': '选择导出的 JSON，或 DeepSeek 官方导出的 ZIP',
       'settings.export': '导出历史对话',
       'settings.exportHint': '保存到 Download',
       'settings.location': '导出位置',
@@ -219,6 +219,10 @@ window.__ModuleLoader__.load({
       'toast.importedSkipped': '已导入 {count} 个对话，跳过 {skipped} 个重复',
       'toast.importedNone': '没有新对话，{count} 个都是重复的',
       'toast.importFailed': '导入失败：不是有效的导出文件',
+      'import.badZip': '导入失败：无法识别这个 ZIP 文件',
+      'import.unsupported': '导入失败：ZIP 使用了不支持的压缩方式',
+      'import.noUnzip': '导入失败：当前环境不支持解压',
+      'import.noSessions': '导入失败：ZIP 里没有会话文件',
       'toast.storageFull': '本地存储已满，最近的改动可能没有保存',
       'toast.deleted': '已删除 {count} 个对话',
       'toast.undo': '撤销',
@@ -372,7 +376,7 @@ window.__ModuleLoader__.load({
       'settings.change': 'Change',
       'settings.delete': 'Delete',
       'settings.import': 'Import conversations',
-      'settings.importHint': 'Pick an exported JSON file',
+      'settings.importHint': 'Pick an exported JSON or a DeepSeek export ZIP',
       'settings.export': 'Export conversations',
       'settings.exportHint': 'Saved to Download',
       'settings.location': 'Export folder',
@@ -403,6 +407,10 @@ window.__ModuleLoader__.load({
       'toast.importedSkipped': 'Imported {count} conversations, skipped {skipped} duplicates',
       'toast.importedNone': 'No new conversations — {count} duplicates skipped',
       'toast.importFailed': 'Import failed: not a valid export file',
+      'import.badZip': 'Import failed: this ZIP file could not be read',
+      'import.unsupported': 'Import failed: unsupported compression in the ZIP',
+      'import.noUnzip': 'Import failed: this environment cannot unzip files',
+      'import.noSessions': 'Import failed: the ZIP has no conversation files',
       'toast.storageFull': 'Local storage is full — recent changes may not be saved',
       'toast.deleted': 'Deleted {count} conversations',
       'toast.undo': 'Undo',
@@ -1027,6 +1035,164 @@ window.__ModuleLoader__.load({
         });
       }
       return out;
+    }
+
+    /**
+     * Read the JSON entries of a ZIP archive without external libraries.
+     * Supports stored (method 0) and deflated (method 8) entries; ZIP64 and
+     * encrypted entries are rejected. Only `.json` members are extracted, so a
+     * large attachment folder costs nothing.
+     *
+     * @param buffer - the archive bytes.
+     * @returns `{ names, text(name) }` for the JSON members.
+     */
+    async function readZipJson(buffer) {
+      const bytes = new Uint8Array(buffer);
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      let eocd = -1;
+      const stop = Math.max(0, bytes.length - 22 - 65535);
+      for (let index = bytes.length - 22; index >= stop; index -= 1) {
+        if (view.getUint32(index, true) === 0x06054b50) {
+          eocd = index;
+          break;
+        }
+      }
+      if (eocd < 0) throw new Error('not-zip');
+      const count = view.getUint16(eocd + 10, true);
+      const cdOffset = view.getUint32(eocd + 16, true);
+      if (count === 0xffff || cdOffset === 0xffffffff) throw new Error('zip64');
+      if (cdOffset >= bytes.length) throw new Error('not-zip');
+      const decoder = new TextDecoder('utf-8');
+      const entries = new Map();
+      let cursor = cdOffset;
+      for (let index = 0; index < count; index += 1) {
+        if (cursor + 46 > bytes.length || view.getUint32(cursor, true) !== 0x02014b50) break;
+        const method = view.getUint16(cursor + 10, true);
+        const compressedSize = view.getUint32(cursor + 20, true);
+        const nameLength = view.getUint16(cursor + 28, true);
+        const extraLength = view.getUint16(cursor + 30, true);
+        const commentLength = view.getUint16(cursor + 32, true);
+        const localOffset = view.getUint32(cursor + 42, true);
+        const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength));
+        cursor += 46 + nameLength + extraLength + commentLength;
+        if (/\.json$/i.test(name)) entries.set(name, { method, compressedSize, localOffset });
+      }
+      return {
+        names: Array.from(entries.keys()),
+        async text(name) {
+          const entry = entries.get(name);
+          if (entry === undefined) return null;
+          const local = entry.localOffset;
+          if (local + 30 > bytes.length || view.getUint32(local, true) !== 0x04034b50) {
+            throw new Error('bad-local-header');
+          }
+          const nameLength = view.getUint16(local + 26, true);
+          const extraLength = view.getUint16(local + 28, true);
+          const start = local + 30 + nameLength + extraLength;
+          const raw = bytes.subarray(start, start + entry.compressedSize);
+          if (entry.method === 0) return decoder.decode(raw);
+          if (entry.method === 8) return decoder.decode(await inflateRaw(raw));
+          throw new Error('unsupported-compression');
+        },
+      };
+    }
+
+    /** Inflate one raw-deflate member with the platform's DecompressionStream. */
+    async function inflateRaw(bytes) {
+      if (typeof DecompressionStream !== 'function') throw new Error('unzip-unavailable');
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+
+    /**
+     * Map one DeepSeek app export session onto this plugin's thread shape.
+     * Request/response fragments become the message text, THINK becomes the
+     * collapsible reasoning block, FILE entries become attachment chips.
+     *
+     * @param session - one `chat_sessions/*.json` payload.
+     * @returns a normalized thread, or null when nothing usable survives.
+     */
+    function threadFromOfficialSession(session) {
+      if (session === null || typeof session !== 'object') return null;
+      const source = Array.isArray(session.messages) ? session.messages.slice() : [];
+      source.sort(function (left, right) {
+        const a = Date.parse(left && left.inserted_at);
+        const b = Date.parse(right && right.inserted_at);
+        return (Number.isFinite(a) ? a : 0) - (Number.isFinite(b) ? b : 0);
+      });
+      const messages = [];
+      for (const message of source) {
+        if (message === null || typeof message !== 'object') continue;
+        const role = message.role === 'ASSISTANT' ? 'assistant' : message.role === 'USER' ? 'user' : null;
+        if (role === null) continue;
+        const texts = [];
+        const thinks = [];
+        const files = [];
+        for (const fragment of Array.isArray(message.fragments) ? message.fragments : []) {
+          if (fragment === null || typeof fragment !== 'object') continue;
+          if (
+            fragment.type === 'REQUEST' ||
+            fragment.type === 'RESPONSE' ||
+            fragment.type === 'TEMPLATE_RESPONSE'
+          ) {
+            if (typeof fragment.content === 'string' && fragment.content.trim() !== '') texts.push(fragment.content);
+          } else if (fragment.type === 'THINK') {
+            if (typeof fragment.content === 'string' && fragment.content.trim() !== '') thinks.push(fragment.content);
+          } else if (fragment.type === 'FILE' && Array.isArray(fragment.files)) {
+            for (const file of fragment.files) {
+              if (file && typeof file.file_name === 'string' && file.file_name !== '') {
+                files.push({ name: file.file_name, text: '' });
+              }
+            }
+          }
+        }
+        const text = texts.join('\n\n').trim();
+        if (text === '' && files.length === 0) continue;
+        const at = Date.parse(message.inserted_at);
+        messages.push({
+          id: newId('m'),
+          role: role,
+          text: text,
+          ...(Number.isFinite(at) ? { at: at } : {}),
+          ...(thinks.length > 0 ? { reasoning: thinks.join('\n\n') } : {}),
+          ...(files.length > 0 ? { files: files } : {}),
+        });
+      }
+      if (messages.length === 0) return null;
+      const title =
+        typeof session.title === 'string' && session.title.trim() !== ''
+          ? session.title.trim().slice(0, 60)
+          : (messages[0].text || '导入的对话').slice(0, 24);
+      const updatedAt = Date.parse(session.updated_at);
+      const insertedAt = Date.parse(session.inserted_at);
+      return {
+        id: newId('c'),
+        title: title,
+        updatedAt: Number.isFinite(updatedAt) ? updatedAt : (messages[messages.length - 1].at || Date.now()),
+        ...(session.pinned === true && Number.isFinite(insertedAt) ? { pinnedAt: insertedAt } : {}),
+        messages: messages,
+      };
+    }
+
+    /** Read a whole DeepSeek app export ZIP into normalized threads. */
+    async function importOfficialArchive(file) {
+      const zip = await readZipJson(await file.arrayBuffer());
+      const names = zip.names.filter(function (name) {
+        return /^chat_sessions\/[^/]+\.json$/i.test(name);
+      });
+      if (names.length === 0) throw new Error('no-sessions');
+      const threads = [];
+      for (const name of names) {
+        try {
+          const parsed = JSON.parse(await zip.text(name));
+          const thread = threadFromOfficialSession(parsed);
+          if (thread !== null) threads.push(thread);
+        } catch (error) {
+          /* skip one malformed session file instead of failing the whole import */
+        }
+      }
+      if (threads.length === 0) throw new Error('empty');
+      return threads;
     }
 
     /** 导入去重用的指纹：标题 + 更新时间 + 消息数 + 首条消息开头。 */
@@ -1911,7 +2077,7 @@ window.__ModuleLoader__.load({
           h('input', {
             ref: fileRef,
             type: 'file',
-            accept: '.json,application/json',
+            accept: '.json,.zip,application/json,application/zip',
             className: 'cd-file-input',
             'aria-hidden': 'true',
             tabIndex: -1,
@@ -4717,11 +4883,16 @@ window.__ModuleLoader__.load({
       const importConversations = useCallback(
         async function (file) {
           try {
-            const text = await file.text();
-            const payload = JSON.parse(text);
-            const list = Array.isArray(payload) ? payload : Array.isArray(payload && payload.threads) ? payload.threads : null;
-            if (list === null) throw new Error('bad-format');
-            const imported = normalizeThreads(list);
+            const name = typeof file.name === 'string' ? file.name.toLowerCase() : '';
+            let imported;
+            if (name.endsWith('.zip')) {
+              imported = await importOfficialArchive(file);
+            } else {
+              const payload = JSON.parse(await file.text());
+              const list = Array.isArray(payload) ? payload : Array.isArray(payload && payload.threads) ? payload.threads : null;
+              if (list === null) throw new Error('bad-format');
+              imported = normalizeThreads(list);
+            }
             if (imported.length === 0) throw new Error('empty');
             /** 同一个文件导入两次、或文件内部有重复条目，都只保留一份。 */
             const seen = {};
@@ -4753,7 +4924,18 @@ window.__ModuleLoader__.load({
             }
             return { ok: true, text: t('toast.imported').replace('{count}', String(fresh.length)) };
           } catch (error) {
-            return { ok: false, text: t('toast.importFailed') };
+            const code = error && error.message ? error.message : '';
+            const key =
+              code === 'not-zip' || code === 'bad-local-header' || code === 'zip64'
+                ? 'import.badZip'
+                : code === 'unsupported-compression'
+                  ? 'import.unsupported'
+                  : code === 'unzip-unavailable'
+                    ? 'import.noUnzip'
+                    : code === 'no-sessions'
+                      ? 'import.noSessions'
+                      : 'toast.importFailed';
+            return { ok: false, text: t(key) };
           }
         },
         [t, threads, saveNow],

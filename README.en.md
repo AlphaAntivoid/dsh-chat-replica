@@ -79,7 +79,7 @@ Light theme:
 - Read-aloud through the official TTS proxy, with two voices: Stella (female) and Tide (male); each answer has play / stop buttons
 - Settings panel with two swipeable tabs:
   - General: theme (light / dark / follow system), text size (small / standard / large, 14 / 16 / 18 px, affecting message text and the composer only), language (Simplified Chinese / English, which also switches the DSH UI language), read-aloud voice and auto-read
-  - Data: import history, export history, export folder, delete all conversations
+  - Data: import history (this plugin's JSON or the DeepSeek app export ZIP), export history, export folder, delete all conversations
   - The footer shows the version and a GitHub repository link (opened in a new tab)
 - Conversation list actions behind the "⋯" on each row: rename, pin, multi-select (bulk pin / delete), delete with confirmation
 
@@ -114,6 +114,19 @@ Rename, pin and delete are structural changes and are written to localStorage **
 still use a 400 ms debounce), plus one extra snapshot on unmount. Leaving the panel right after deleting a
 conversation therefore no longer resurrects it, and an emptied list stays empty instead of falling back to the
 demo conversations.
+
+## Import formats
+
+Settings → Data → Import history accepts two kinds of files:
+
+- **This plugin's JSON export**: `{ "threads": [ ... ] }` or a bare array of the same shape
+- **The DeepSeek app export ZIP** (`deepseek_data-YYYY-MM-DD.zip`): the page ships a dependency-free ZIP reader (stored / deflate; ZIP64 is reported as unsupported) and only extracts `chat_sessions/*.json` — attachments stay untouched. Mapping:
+  - `REQUEST` / `RESPONSE` / `TEMPLATE_RESPONSE` fragments become the message text
+  - `THINK` fragments become the collapsible "Thought" block under an answer
+  - `FILE` fragments become attachment-name chips (images are not rendered here, only their names are kept)
+  - `pinned`, `inserted_at` / `updated_at` become the pin state and timestamps; tool calls and search fragments are skipped
+
+Importing the same file twice is deduplicated by fingerprint, and a failed parse says whether the ZIP was unreadable, used an unsupported compression, or contained no conversations. Everything happens locally — nothing is uploaded.
 
 ## Requirements
 

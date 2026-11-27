@@ -3,6 +3,24 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.21.0
+
+### 中文
+
+- 支持导入 **DeepSeek 官方 App 导出的 ZIP**（`deepseek_data-YYYY-MM-DD.zip`）：内置无依赖 ZIP 读取（stored / deflate，ZIP64 明确拒绝），只解压 `chat_sessions/*.json`，不读图片附件
+- 片段映射：`REQUEST` / `RESPONSE` / `TEMPLATE_RESPONSE` → 消息正文，`THINK` → 「已思考」折叠块，`FILE` → 附件名标签；保留 `pinned` 与 `inserted_at` / `updated_at`，跳过工具调用与搜索片段
+- 失败原因更具体：无法识别 ZIP / 不支持的压缩方式 / 当前环境不支持解压 / ZIP 里没有会话文件
+- 用真实导出实测：30 个会话、1058 条消息、30 个带思考、9 个带附件、1 个置顶，全部正确导入且时间戳完整
+- 测试：207 条断言（合成 ZIP 导入 + 损坏 ZIP 报错）
+
+### English
+
+- Added importing the **DeepSeek app export ZIP** (`deepseek_data-YYYY-MM-DD.zip`): a dependency-free ZIP reader (stored / deflate; ZIP64 rejected) extracts only `chat_sessions/*.json` and never reads attachment images
+- Fragment mapping: `REQUEST` / `RESPONSE` / `TEMPLATE_RESPONSE` become message text, `THINK` becomes the collapsible "Thought" block, `FILE` becomes attachment-name chips; `pinned` and `inserted_at` / `updated_at` are preserved while tool calls and search fragments are skipped
+- Clearer failures: unreadable ZIP / unsupported compression / no unzip support / no conversation files
+- Verified against a real export: 30 conversations, 1058 messages, 30 with reasoning, 9 with attachments and 1 pinned all imported correctly with complete timestamps
+- Tests: 207 assertions (synthetic ZIP import plus a broken-ZIP error message)
+
 ## 1.20.0
 
 ### 中文
