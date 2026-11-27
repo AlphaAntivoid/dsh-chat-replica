@@ -1556,11 +1556,17 @@ async function main() {
     tree = rerender();
     assert(byClass(tree, 'cd-sider').length === 0, 'the sidebar is removed');
     assert(byClass(tree, 'cd-header-pill').length === 1, 'the header switches to the collapsed pill');
-    const find = collect(tree, (node) => node.kind === 'host' && node.props['aria-label'] === '查找')[0];
-    assert(find, 'the find action stays available when the sidebar is closed');
-    click(find);
+    const pill = byClass(tree, 'cd-pill')[0];
+    assert(pill, 'the floating capsule is rendered');
+    const findInPill = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '查找')[0];
+    assert(findInPill, 'the find action moves into the floating capsule');
+    assert(
+      collect(tree, (node) => node.kind === 'host' && node.props['aria-label'] === '查找').length === 1,
+      'the find action is not duplicated',
+    );
+    click(findInPill);
     tree = rerender();
-    assert(byClass(tree, 'cd-find').length === 1, 'the find bar opens from the collapsed header');
+    assert(byClass(tree, 'cd-find').length === 1, 'the find bar opens from the collapsed capsule');
     console.log('PASS 37: the find action survives a collapsed sidebar');
   }
 

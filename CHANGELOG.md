@@ -3,6 +3,20 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.17.2
+
+### 中文
+
+- 收起侧栏后，「查找」按钮并入右上角的浮动胶囊（顺序：边栏 / 查找 / 朗读 / 新对话），不再单独挂在标题栏上；手机端同样受益
+- 胶囊加宽后把标题栏的预留右距从 152px 调到 188px，长标题仍然正常省略
+- 测试改为断言：收起后查找按钮只出现一次、且位于胶囊内、能打开查找条
+
+### English
+
+- With the sidebar collapsed, the find button now joins the floating capsule (order: sidebar / find / read-aloud / new chat) instead of sitting alone in the header; mobile benefits too
+- Widened the capsule and raised the header's reserved right padding from 152px to 188px so long titles still ellipsize correctly
+- Tests now assert the find button appears exactly once, inside the capsule, and opens the bar
+
 ## 1.17.1
 
 ### 中文

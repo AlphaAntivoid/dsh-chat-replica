@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.17.1';
+    const PLUGIN_VERSION = '1.17.2';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -3535,6 +3535,15 @@ window.__ModuleLoader__.load({
         setFindIndex(0);
       }, []);
 
+      /** 打开查找条并把焦点放进输入框（标题栏与收起后的胶囊共用）。 */
+      const openFind = useCallback(function () {
+        setFindOpen(true);
+        setTimeout(function () {
+          const input = findInputRef.current;
+          if (input && input.focus) input.focus();
+        }, 0);
+      }, []);
+
       const loadModels = useCallback(async function () {
         try {
           const response = await fetch(`${API}/models`, { headers: { accept: 'application/json' } });
@@ -5381,6 +5390,19 @@ window.__ModuleLoader__.load({
                   },
                   h(Icon, { name: 'menu', size: 22, strokeWidth: 2 }),
                 ),
+                hasMessages
+                  ? h(
+                      'button',
+                      {
+                        type: 'button',
+                        className: 'cd-iconbtn cd-iconbtn-lg',
+                        title: t('find.open'),
+                        'aria-label': t('find.open'),
+                        onClick: openFind,
+                      },
+                      h(Icon, { name: 'search', size: 22, strokeWidth: 2 }),
+                    )
+                  : null,
                 h(
                   'button',
                   {
@@ -5424,7 +5446,7 @@ window.__ModuleLoader__.load({
               activeThread ? activeThread.title : t('app.name'),
             ),
             h('span', { className: 'cd-header-spacer' }),
-            !hasMessages
+            collapsed || !hasMessages
               ? null
               : h(
                   'button',
@@ -5433,13 +5455,7 @@ window.__ModuleLoader__.load({
                     className: 'cd-iconbtn cd-iconbtn-sm',
                     title: t('find.open'),
                     'aria-label': t('find.open'),
-                    onClick: function () {
-                      setFindOpen(true);
-                      setTimeout(function () {
-                        const input = findInputRef.current;
-                        if (input && input.focus) input.focus();
-                      }, 0);
-                    },
+                    onClick: openFind,
                   },
                   h(Icon, { name: 'search', size: 18 }),
                 ),
@@ -5693,7 +5709,7 @@ window.__ModuleLoader__.load({
 
 .cd-main{position:relative;box-sizing:border-box;display:flex;flex:1;flex-direction:column;min-width:0;min-height:0}
 .cd-header{box-sizing:border-box;display:flex;flex-shrink:0;align-items:center;height:60px;padding:12px 10px 0;background:var(--dsw-alias-bg-base)}
-.cd-header-pill{padding-right:152px}
+.cd-header-pill{padding-right:188px}
 @media (max-width:767px){.cd-header-pill{padding-left:64px}}
 .cd-header-title{max-width:480px;overflow:hidden;padding:8px 12px;border:none;border-radius:10px;background:transparent;font:500 14px/22px var(--dsw-font-family);color:var(--dsw-alias-label-primary);white-space:nowrap;text-overflow:ellipsis;cursor:pointer;text-align:left}
 .cd-header-title:hover{background:var(--dsw-alias-interactive-bg-hover)}
