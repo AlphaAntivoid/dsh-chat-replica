@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.16.0
+
+### 中文
+
+- 用量明细：点回答下方的用量行展开「本轮用量」面板（未缓存输入 / 缓存读取 / 缓存写入 / 输出（含推理）/ 缓存命中 / 总计）
+- 点输入框右侧的上下文圆环展开「上下文用量」面板：百分比、进度条、`~已用 / 窗口`、剩余量与估算说明
+- 两个面板支持 Esc 与遮罩关闭，切换会话自动收起；没有数据时不显示入口
+- 测试：168 条断言（面板打开、拆分数字、缓存命中、Esc 关闭、上下文面板百分比）
+
+### English
+
+- Usage details: clicking the line under an answer opens "Turn usage" (uncached input / cached input / cache write / output with reasoning / cache hit / total)
+- Clicking the context ring opens "Context usage": percentage, bar, `~used / window`, remaining tokens and the estimation note
+- Both panels close on Esc or the mask, collapse when switching conversations, and only render when data exists
+- Tests: 168 assertions (panel opens, breakdown figures, cache hit, Esc, context percentage)
+
 ## 1.15.0
 
 ### 中文

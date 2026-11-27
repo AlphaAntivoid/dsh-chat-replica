@@ -33,7 +33,7 @@ Find in a conversation: press Ctrl/Cmd+F, matches are highlighted, and the curre
 
 Usage mirrors DSH: every answer ends with this turn's `↑ billed input · ↓ output` (hover for cache hit and
 reasoning tokens), and the ring on the right of the composer shows context occupancy (hover for
-`~used / window`).
+`~used / window`). Click the usage line or the ring to open the breakdown.
 
 ![Usage and context](media/screenshots/usage-dark.png)
 
@@ -63,6 +63,7 @@ Light theme:
 - Model picker: the composer shows the current model; switch per provider or fall back to the default. The choice is stored locally and sent with each request; an unknown model falls back to the default
 - The settings footer can check for updates: it queries the latest GitHub release only when clicked and shows up-to-date / a new version (click again to open it) / a failed check
 - Usage matches DSH: every answer ends with this turn's `↑ billed input · ↓ output`, the composer ring shows context occupancy, and hovering reveals cache-hit and reasoning tokens
+- Clicking the usage line opens this turn's breakdown (uncached input / cached input / cache write / output with reasoning / cache hit / total); clicking the ring opens the context panel (percentage, bar, `~used / window`, remaining)
 - Message bubbles, welcome screen, composer, Markdown (headings / lists / inline code / code blocks) and a collapsible "Thought" block
 - Upload text files, voice input, send / stop on the right of the composer
 - "Deep thinking" maps to the model's reasoningEffort (on = max, off = off; levels come from the model declaration)

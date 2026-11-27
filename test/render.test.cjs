@@ -420,7 +420,15 @@ function mount(storageSeed, options) {
   };
   plugin.apply(ctx);
 
-  return { registered, storage, timerDelays };
+  return {
+    registered,
+    storage,
+    timerDelays,
+    /** Dispatch a window-level event, e.g. the Ctrl+F / Escape listeners. */
+    emitWindow(name, event) {
+      (windowListeners.get(name) || []).slice().forEach((handler) => handler(event));
+    },
+  };
 }
 
 function renderPanel(session) {
@@ -1410,6 +1418,71 @@ async function main() {
       'the meter is announced with its reading: ' + meter.props['aria-label'],
     );
     console.log('PASS 34: token usage and context occupancy render');
+  }
+
+  /* --- 35. usage panels open with exact figures ---------------------------- */
+  {
+    const session = mount(
+      {
+        'deepseek-chat-ui.threads.v1': JSON.stringify([
+          {
+            id: 't-usage',
+            title: '带用量的会话',
+            updatedAt: 1700000000000,
+            messages: [
+              { id: 'u1', role: 'user', text: '你好', at: 1700000000000 },
+              {
+                id: 'a1',
+                role: 'assistant',
+                text: '你好呀',
+                at: 1700000001000,
+                usage: { inputTokens: 1000, cacheReadTokens: 200, cacheWriteTokens: 0, outputTokens: 356, reasoningTokens: 120 },
+              },
+            ],
+          },
+        ]),
+      },
+      {
+        fetch: async (url) => {
+          if (String(url).indexOf('/models') >= 0) {
+            return {
+              ok: true,
+              json: async () => ({
+                providers: [],
+                current: { provider: 'deepseek', model: 'deepseek-chat', contextWindow: 128000 },
+              }),
+              text: async () => '{}',
+            };
+          }
+          return { ok: true, json: async () => ({}), text: async () => '{}' };
+        },
+      },
+    );
+    let tree = renderPanel(session);
+    await wait(10);
+    tree = rerender();
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+
+    click(byClass(tree, 'cd-turn-usage')[0]);
+    tree = rerender();
+    let panel = byClass(tree, 'cd-usage-panel')[0];
+    assert(panel, 'the turn usage panel opens');
+    const panelText = textOf(panel);
+    assert(panelText.indexOf('本轮用量') >= 0, 'the panel is titled 本轮用量');
+    assert(panelText.indexOf('未缓存输入') >= 0 && panelText.indexOf('缓存命中') >= 0, 'the panel lists the breakdown');
+    assert(panelText.indexOf('17%') >= 0, 'the panel shows the cache-hit share');
+    session.emitWindow('keydown', { key: 'Escape' });
+    tree = rerender();
+    assert(byClass(tree, 'cd-usage-panel').length === 0, 'Escape closes the usage panel');
+
+    click(byClass(tree, 'cd-meter')[0]);
+    tree = rerender();
+    panel = byClass(tree, 'cd-usage-panel')[0];
+    assert(panel, 'the context panel opens');
+    assert(textOf(panel).indexOf('上下文用量') >= 0, 'the context panel is titled 上下文用量');
+    assert(textOf(panel).indexOf('1%') >= 0, 'the context panel repeats the reading');
+    console.log('PASS 35: usage panels open with exact figures');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

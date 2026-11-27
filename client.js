@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.15.0';
+    const PLUGIN_VERSION = '1.16.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -73,12 +73,23 @@ window.__ModuleLoader__.load({
     /** 一轮的上行/下行计数；缺 usage 时返回 null。 */
     function usageTotals(usage) {
       if (!usage || typeof usage !== 'object') return null;
-      const input = billedInputTokens(usage);
+      const uncached = Number(usage.inputTokens) || 0;
+      const cacheRead = Number(usage.cacheReadTokens) || 0;
+      const cacheWrite = Number(usage.cacheWriteTokens) || 0;
+      const input = uncached + cacheRead + cacheWrite;
       const output = Number(usage.outputTokens) || 0;
       if (input === 0 && output === 0) return null;
       const reasoning = Number(usage.reasoningTokens) || 0;
-      const cacheHit = input === 0 ? null : Math.round(((Number(usage.cacheReadTokens) || 0) / input) * 100);
-      return { input: input, output: output, reasoning: reasoning, cacheHit: cacheHit };
+      const cacheHit = input === 0 ? null : Math.round((cacheRead / input) * 100);
+      return {
+        input: input,
+        output: output,
+        reasoning: reasoning,
+        cacheHit: cacheHit,
+        uncached: uncached,
+        cacheRead: cacheRead,
+        cacheWrite: cacheWrite,
+      };
     }
 
     /** 聊天用的模型选择；null 表示跟随 DSH 的默认模型。 */
@@ -272,6 +283,15 @@ window.__ModuleLoader__.load({
       'usage.output': '输出',
       'usage.reasoning': '推理',
       'usage.cacheHit': '缓存命中',
+      'usage.panelTurn': '本轮用量',
+      'usage.panelContext': '上下文用量',
+      'usage.uncached': '未缓存输入',
+      'usage.cacheRead': '缓存读取',
+      'usage.cacheWrite': '缓存写入',
+      'usage.total': '总计',
+      'usage.remaining': '剩余约 {tokens} tokens',
+      'usage.approx': '按上一轮计费输入 + 本轮输出估算，不是 provider 的精确压力值',
+      'usage.close': '关闭',
       'rename.title': '重命名对话',
       'rename.field': '对话标题',
       'rename.save': '保存',
@@ -444,6 +464,15 @@ window.__ModuleLoader__.load({
       'usage.output': 'Output',
       'usage.reasoning': 'Reasoning',
       'usage.cacheHit': 'Cache hit',
+      'usage.panelTurn': 'Turn usage',
+      'usage.panelContext': 'Context usage',
+      'usage.uncached': 'Uncached input',
+      'usage.cacheRead': 'Cached input',
+      'usage.cacheWrite': 'Cache write',
+      'usage.total': 'Total',
+      'usage.remaining': '~{tokens} tokens left',
+      'usage.approx': 'Estimated from the last billed input plus this turn’s output, not a provider-exact pressure reading',
+      'usage.close': 'Close',
       'rename.title': 'Rename conversation',
       'rename.field': 'Conversation title',
       'rename.save': 'Save',
@@ -3127,10 +3156,11 @@ window.__ModuleLoader__.load({
             { className: 'cd-right' },
             props.contextOccupancy
               ? h(
-                  'span',
+                  'button',
                   {
+                    type: 'button',
                     className: 'cd-meter',
-                    role: 'img',
+                    'aria-haspopup': 'dialog',
                     'aria-label': t('usage.context')
                       .replace('{percent}', String(props.contextOccupancy.percent))
                       .replace('{used}', formatTokenCount(props.contextOccupancy.used))
@@ -3139,6 +3169,9 @@ window.__ModuleLoader__.load({
                       .replace('{percent}', String(props.contextOccupancy.percent))
                       .replace('{used}', formatTokenCount(props.contextOccupancy.used))
                       .replace('{window}', formatTokenCount(props.contextOccupancy.window)),
+                    onClick: function () {
+                      props.onOpenUsage('context');
+                    },
                   },
                   h(
                     'svg',
@@ -3315,6 +3348,8 @@ window.__ModuleLoader__.load({
       const [contextWindow, setContextWindow] = useState(function () {
         return loadContextWindow();
       });
+      /** 用量明细面板：'turn' | 'context' | null。 */
+      const [usagePanel, setUsagePanel] = useState(null);
 
       const bodyRef = useRef(null);
       const findInputRef = useRef(null);
@@ -3450,7 +3485,7 @@ window.__ModuleLoader__.load({
             const message = activeThread.messages[index];
             if (message.role === 'assistant' && message.usage) {
               const totals = usageTotals(message.usage);
-              if (totals !== null) return totals;
+              if (totals !== null) return { usage: message.usage, totals: totals };
             }
           }
           return null;
@@ -3461,7 +3496,7 @@ window.__ModuleLoader__.load({
       const occupancy = useMemo(
         function () {
           if (contextWindow === null || activeUsage === null) return null;
-          const used = activeUsage.input + activeUsage.output;
+          const used = activeUsage.totals.input + activeUsage.totals.output;
           return {
             used: used,
             window: contextWindow,
@@ -3513,6 +3548,28 @@ window.__ModuleLoader__.load({
           };
         },
         [modelMenu],
+      );
+
+      useEffect(
+        function () {
+          if (usagePanel === null) return;
+          const onKey = function (event) {
+            if (event.key === 'Escape') setUsagePanel(null);
+          };
+          window.addEventListener('keydown', onKey);
+          return function () {
+            window.removeEventListener('keydown', onKey);
+          };
+        },
+        [usagePanel],
+      );
+
+      // 切换会话时收起用量面板，避免展示上一条会话的数字。
+      useEffect(
+        function () {
+          setUsagePanel(null);
+        },
+        [activeId],
       );
 
       // 切换会话时收起查找条，避免旧查询挂在新对话上。
@@ -4954,6 +5011,94 @@ window.__ModuleLoader__.load({
         );
       };
 
+      /**
+       * 用量明细：本轮 token 拆分与上下文占用。只展示确切数字与一条近似说明，
+       * 不虚构 system / tools 分段。
+       */
+      const renderUsagePanel = function () {
+        if (usagePanel === null) return null;
+        const title = usagePanel === 'turn' ? t('usage.panelTurn') : t('usage.panelContext');
+        const close = function () {
+          setUsagePanel(null);
+        };
+        let body = null;
+        if (usagePanel === 'turn' && activeUsage !== null) {
+          const totals = activeUsage.totals;
+          const rows = [
+            [t('usage.uncached'), formatTokenCount(totals.uncached)],
+            [t('usage.cacheRead'), formatTokenCount(totals.cacheRead)],
+            [t('usage.cacheWrite'), formatTokenCount(totals.cacheWrite)],
+            [
+              t('usage.output'),
+              formatTokenCount(totals.output) +
+                (totals.reasoning > 0 ? '（' + t('usage.reasoning') + ' ' + formatTokenCount(totals.reasoning) + '）' : ''),
+            ],
+            [t('usage.cacheHit'), totals.cacheHit === null ? '—' : totals.cacheHit + '%'],
+            [t('usage.total'), formatTokenCount(totals.input + totals.output)],
+          ];
+          body = h(
+            'dl',
+            { className: 'cd-usage-rows' },
+            rows.map(function (row, index) {
+              return h(
+                'div',
+                { key: index, className: 'cd-usage-row' },
+                h('dt', null, row[0]),
+                h('dd', null, row[1]),
+              );
+            }),
+          );
+        } else if (usagePanel === 'context' && occupancy !== null) {
+          body = h(
+            'div',
+            null,
+            h('div', { className: 'cd-usage-percent' }, occupancy.percent + '%'),
+            h(
+              'div',
+              { className: 'cd-usage-bar' },
+              h('span', { style: { width: occupancy.percent + '%' } }),
+            ),
+            h(
+              'div',
+              { className: 'cd-usage-figures' },
+              '~' + formatTokenCount(occupancy.used) + ' / ' + formatTokenCount(occupancy.window),
+            ),
+            h(
+              'div',
+              { className: 'cd-usage-note' },
+              t('usage.remaining').replace('{tokens}', formatTokenCount(Math.max(0, occupancy.window - occupancy.used))),
+            ),
+            h('div', { className: 'cd-usage-note' }, t('usage.approx')),
+          );
+        }
+        return h(
+          'div',
+          { className: 'cd-usage-layer' },
+          h('div', { className: 'cd-usage-mask', onClick: close }),
+          h(
+            'div',
+            { className: 'cd-usage-panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+            h(
+              'div',
+              { className: 'cd-usage-head' },
+              h('span', { className: 'cd-usage-title' }, title),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'cd-iconbtn cd-iconbtn-sm',
+                  title: t('usage.close'),
+                  'aria-label': t('usage.close'),
+                  onClick: close,
+                },
+                h(Icon, { name: 'x', size: 15 }),
+              ),
+            ),
+            body,
+          ),
+        );
+      };
+
       const renderThread = function () {
         if (!activeThread) return null;
         const messages = activeThread.messages;
@@ -5044,9 +5189,11 @@ window.__ModuleLoader__.load({
               turnUsage === null
                 ? null
                 : h(
-                    'div',
+                    'button',
                     {
+                      type: 'button',
                       className: 'cd-turn-usage',
+                      'aria-haspopup': 'dialog',
                       title:
                         t('usage.input') + ' ' + formatTokenCount(turnUsage.input) +
                         (turnUsage.cacheHit === null ? '' : ' · ' + t('usage.cacheHit') + ' ' + turnUsage.cacheHit + '%') +
@@ -5054,6 +5201,9 @@ window.__ModuleLoader__.load({
                         (turnUsage.reasoning > 0
                           ? ' · ' + t('usage.reasoning') + ' ' + formatTokenCount(turnUsage.reasoning)
                           : ''),
+                      onClick: function () {
+                        setUsagePanel('turn');
+                      },
                     },
                     '↑ ' + formatTokenCount(turnUsage.input) + ' · ↓ ' + formatTokenCount(turnUsage.output),
                   ),
@@ -5238,6 +5388,7 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'cd-input-area' },
+            usagePanel === null ? null : renderUsagePanel(),
             modelMenu ? renderModelMenu() : null,
             undoDelete !== null
               ? h(
@@ -5281,6 +5432,9 @@ window.__ModuleLoader__.load({
                   loadModels();
                 },
                 contextOccupancy: occupancy,
+                onOpenUsage: function (kind) {
+                  setUsagePanel(kind);
+                },
                 home: !hasMessages,
                 textareaRef: textareaRef,
                 attachments: attachments,
@@ -5668,9 +5822,25 @@ mark.cd-mark{padding:0 1px;border-radius:3px;background:color-mix(in srgb,var(--
 .cd-model-menu{position:absolute;left:10px;bottom:calc(100% - 4px);z-index:31;box-sizing:border-box;display:flex;flex-direction:column;width:250px;max-height:min(420px,72vh);overflow-y:auto;padding:5px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-overlay,var(--dsw-alias-bg-layer-2));box-shadow:0 16px 40px rgba(0,0,0,.28);pointer-events:auto}
 .cd-model-group{padding:8px 10px 4px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;letter-spacing:.02em}
 .cd-model-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cd-meter{display:inline-flex;flex-shrink:0;align-items:center;gap:4px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;font-variant-numeric:tabular-nums}
+.cd-meter{display:inline-flex;flex-shrink:0;align-items:center;gap:4px;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:12px/16px var(--dsw-font-family);font-variant-numeric:tabular-nums;cursor:pointer}
+.cd-meter:hover{color:var(--dsw-alias-label-secondary)}
 .cd-meter svg{display:block;flex-shrink:0}
-.cd-turn-usage{display:flex;justify-content:flex-end;margin-top:4px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;font-variant-numeric:tabular-nums}
+.cd-turn-usage{display:flex;justify-content:flex-end;align-items:center;margin-top:4px;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:12px/16px var(--dsw-font-family);font-variant-numeric:tabular-nums;cursor:pointer}
+.cd-turn-usage:hover{color:var(--dsw-alias-label-secondary)}
+.cd-usage-layer{position:absolute;inset:0;z-index:32;pointer-events:none}
+.cd-usage-mask{position:fixed;inset:0;pointer-events:auto}
+.cd-usage-panel{position:absolute;right:10px;bottom:calc(100% - 4px);z-index:33;box-sizing:border-box;width:280px;padding:12px 14px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-overlay,var(--dsw-alias-bg-layer-2));box-shadow:0 16px 40px rgba(0,0,0,.28);pointer-events:auto}
+.cd-usage-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cd-usage-title{color:var(--dsw-alias-label-primary);font-size:13px;font-weight:500;line-height:18px}
+.cd-usage-rows{display:flex;flex-direction:column;gap:6px;margin:0}
+.cd-usage-row{display:flex;justify-content:space-between;gap:12px;margin:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;font-variant-numeric:tabular-nums}
+.cd-usage-row dt{margin:0}
+.cd-usage-row dd{margin:0;color:var(--dsw-alias-label-primary)}
+.cd-usage-percent{color:var(--dsw-alias-label-primary);font-size:22px;font-weight:600;line-height:28px;font-variant-numeric:tabular-nums}
+.cd-usage-bar{height:6px;margin:8px 0;overflow:hidden;border-radius:3px;background:color-mix(in srgb,currentColor 18%,transparent);color:var(--dsw-alias-label-tertiary)}
+.cd-usage-bar span{display:block;height:100%;border-radius:3px;background:var(--dsw-alias-label-secondary)}
+.cd-usage-figures{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;font-variant-numeric:tabular-nums}
+.cd-usage-note{margin-top:6px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}
 .cd-usage{margin-right:2px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .cd-delete-actions{display:flex;gap:10px;margin-top:22px}
 .cd-confirm-pill{display:inline-flex;flex:1;align-items:center;justify-content:center;height:40px;padding:0 14px;border:none;border-radius:999px;font-family:inherit;font-size:14px;font-weight:500;line-height:20px;white-space:nowrap;cursor:pointer;transition:background-color .15s,opacity .15s}
