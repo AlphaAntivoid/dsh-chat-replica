@@ -3,6 +3,24 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.22.0
+
+### 中文
+
+- 新增图片上传：回形针接受图片，最长边缩到 1600px（WebP，原图 ≤400KB 且不超尺寸时保留原图），存进本地 IndexedDB（`deepseek-chat-ui-images`）
+- 聊天气泡显示缩略图，点击打开大图灯箱，Esc 或点遮罩关闭；图片多时自动换行
+- 导入 DeepSeek 官方导出 ZIP 时，`FILE` 片段里的 `is_image` 附件会从 ZIP 解出并存进图片库，历史记录里直接显示；非图片附件仍是文件名标签
+- 发给模型的文本会带一行「【图片】文件名」提示（当前模型接口是纯文本，不会解析图片内容）
+- 测试：222 条断言（上传图片→发送→缩略图→灯箱 Esc，及导入 ZIP 内图片→缩略图）
+
+### English
+
+- Added image upload: the paperclip accepts images, downscales them to a 1600px long edge (WebP; the original is kept when it is ≤400KB and already small enough) and stores them in local IndexedDB (`deepseek-chat-ui-images`)
+- Chat bubbles show thumbnails; clicking opens a lightbox that closes on Esc or a mask click, and multiple images wrap
+- When importing a DeepSeek export ZIP, `FILE` fragments with `is_image` are extracted from the archive into the local image store and displayed in history; non-image attachments stay as name chips
+- The text sent to the model now carries a `【图片】name` hint line (the current model route is text-only and does not read image content)
+- Tests: 222 assertions (upload → send → thumbnail → lightbox Esc, and importing an image from a ZIP → thumbnail)
+
 ## 1.21.1
 
 ### 中文

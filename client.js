@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.21.1';
+    const PLUGIN_VERSION = '1.22.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -150,7 +150,7 @@ window.__ModuleLoader__.load({
       'fork.suffix': '分叉',
       'toast.forked': '已分叉到新对话',
       'action.regenerate': '重新生成',
-      'action.attach': '上传文件',
+      'action.attach': '上传图片或文件',
       'action.voice': '语音输入',
       'action.voiceStop': '停止录音',
       'action.retry': '重试',
@@ -243,7 +243,9 @@ window.__ModuleLoader__.load({
       'toast.emptyTranscript': '没有识别到内容',
       'toast.tooShort': '录音太短，请再说一次',
       'toast.fileTooLarge': '文件超过 512 KB',
+      'toast.imageTooLarge': '图片超过 12 MB',
       'toast.fileUnsupported': '只支持文本类文件（代码、txt、md、csv 等）',
+      'toast.imageUnsupported': '图片读取失败',
       'toast.fileLimit': '最多附带 5 个文件',
       'toast.network': '服务未响应，请稍后重试',
       'transcribing': '识别中…',
@@ -338,7 +340,7 @@ window.__ModuleLoader__.load({
       'fork.suffix': 'fork',
       'toast.forked': 'Forked into a new conversation',
       'action.regenerate': 'Regenerate',
-      'action.attach': 'Attach file',
+      'action.attach': 'Attach image or file',
       'action.voice': 'Voice input',
       'action.voiceStop': 'Stop recording',
       'action.retry': 'Retry',
@@ -431,7 +433,9 @@ window.__ModuleLoader__.load({
       'toast.emptyTranscript': 'No speech detected',
       'toast.tooShort': 'Recording too short',
       'toast.fileTooLarge': 'File is larger than 512 KB',
+      'toast.imageTooLarge': 'Image is larger than 12 MB',
       'toast.fileUnsupported': 'Text files only (code, txt, md, csv…)',
+      'toast.imageUnsupported': 'Could not read this image',
       'toast.fileLimit': 'At most 5 attachments',
       'toast.network': 'The service did not respond — try again',
       'transcribing': 'Transcribing…',
@@ -794,6 +798,240 @@ window.__ModuleLoader__.load({
       return `${prefix}${Date.now().toString(36)}${sequence.toString(36)}`;
     }
 
+    /* ------------------------------------------------------------- image store */
+
+    const IMAGE_DB_NAME = 'deepseek-chat-ui-images';
+    const IMAGE_STORE = 'images';
+    const IMAGE_MAX_DIMENSION = 1600;
+    const IMAGE_KEEP_BYTES = 400 * 1024;
+    /** In-memory fallback when IndexedDB is unavailable (tests, private modes). */
+    const memoryImages = new Map();
+    let imageDbPromise = null;
+
+    function imageDb() {
+      if (imageDbPromise !== null) return imageDbPromise;
+      imageDbPromise = new Promise(function (resolve, reject) {
+        if (typeof indexedDB === 'undefined') {
+          reject(new Error('no-idb'));
+          return;
+        }
+        const request = indexedDB.open(IMAGE_DB_NAME, 1);
+        request.onupgradeneeded = function () {
+          if (!request.result.objectStoreNames.contains(IMAGE_STORE)) {
+            request.result.createObjectStore(IMAGE_STORE);
+          }
+        };
+        request.onsuccess = function () {
+          resolve(request.result);
+        };
+        request.onerror = function () {
+          reject(request.error);
+        };
+      });
+      return imageDbPromise;
+    }
+
+    /** Persist one image blob; silently falls back to memory storage. */
+    async function putImage(id, blob) {
+      try {
+        const db = await imageDb();
+        await new Promise(function (resolve, reject) {
+          const tx = db.transaction(IMAGE_STORE, 'readwrite');
+          tx.objectStore(IMAGE_STORE).put(blob, id);
+          tx.oncomplete = function () {
+            resolve();
+          };
+          tx.onerror = function () {
+            reject(tx.error);
+          };
+        });
+      } catch (error) {
+        memoryImages.set(id, blob);
+      }
+    }
+
+    async function getImageBlob(id) {
+      if (memoryImages.has(id)) return memoryImages.get(id);
+      try {
+        const db = await imageDb();
+        return await new Promise(function (resolve, reject) {
+          const tx = db.transaction(IMAGE_STORE, 'readonly');
+          const request = tx.objectStore(IMAGE_STORE).get(id);
+          request.onsuccess = function () {
+            resolve(request.result || null);
+          };
+          request.onerror = function () {
+            reject(request.error);
+          };
+        });
+      } catch (error) {
+        return null;
+      }
+    }
+
+    /** Downscale before storing; the original survives when resizing is unavailable. */
+    async function prepareImageBlob(file) {
+      try {
+        if (typeof createImageBitmap !== 'function' || typeof document === 'undefined' || !document.createElement) {
+          return file;
+        }
+        const bitmap = await createImageBitmap(file);
+        const width = bitmap.width || IMAGE_MAX_DIMENSION;
+        const height = bitmap.height || IMAGE_MAX_DIMENSION;
+        const scale = Math.min(1, IMAGE_MAX_DIMENSION / Math.max(width, height));
+        if (scale >= 1 && file.size <= IMAGE_KEEP_BYTES) {
+          bitmap.close();
+          return file;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        const context = typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+        if (context === null) {
+          bitmap.close();
+          return file;
+        }
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        const blob = await new Promise(function (resolve) {
+          canvas.toBlob(resolve, 'image/webp', 0.82);
+        });
+        return blob || file;
+      } catch (error) {
+        return file;
+      }
+    }
+
+    function mimeForImageName(name) {
+      const lower = String(name || '').toLowerCase();
+      if (lower.endsWith('.png')) return 'image/png';
+      if (lower.endsWith('.gif')) return 'image/gif';
+      if (lower.endsWith('.webp')) return 'image/webp';
+      if (lower.endsWith('.bmp')) return 'image/bmp';
+      return 'image/jpeg';
+    }
+
+    /** Resolve one stored image to an object URL, released on unmount. */
+    function useImageUrl(imageId) {
+      const [url, setUrl] = useState('');
+      useEffect(
+        function () {
+          let alive = true;
+          let created = '';
+          getImageBlob(imageId).then(function (blob) {
+            if (!alive || !blob) return;
+            if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return;
+            created = URL.createObjectURL(blob);
+            setUrl(created);
+          });
+          return function () {
+            alive = false;
+            if (created !== '' && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+              URL.revokeObjectURL(created);
+            }
+          };
+        },
+        [imageId],
+      );
+      return url;
+    }
+
+    function ImageChip(props) {
+      const url = useImageUrl(props.imageId);
+      return h(
+        'span',
+        { className: 'cd-chip cd-chip-image', title: props.name },
+        url === ''
+          ? h(Icon, { name: 'file', size: 13 })
+          : h('img', { className: 'cd-chip-thumb', src: url, alt: props.name }),
+        h('span', { className: 'cd-chip-name' }, props.name),
+        props.onRemove
+          ? h(
+              'button',
+              {
+                type: 'button',
+                className: 'cd-chip-x',
+                title: props.removeLabel,
+                'aria-label': props.removeLabel,
+                onClick: props.onRemove,
+              },
+              h(Icon, { name: 'x', size: 11 }),
+            )
+          : null,
+      );
+    }
+
+    function ImageThumb(props) {
+      const url = useImageUrl(props.image.id);
+      return h(
+        'button',
+        {
+          type: 'button',
+          className: 'cd-img-btn',
+          title: props.image.name,
+          'aria-label': props.image.name,
+          onClick: function () {
+            props.onOpen({ name: props.image.name, url: url });
+          },
+        },
+        url === '' ? h('span', { className: 'cd-img-fallback' }, props.image.name) : h('img', { className: 'cd-img-thumb', src: url, alt: props.image.name }),
+      );
+    }
+
+    /** Message images with a click-through lightbox. */
+    function MessageImages(props) {
+      const t = props.t;
+      const [viewer, setViewer] = useState(null);      useEffect(
+        function () {
+          if (viewer === null) return;
+          const onKey = function (event) {
+            if (event.key === 'Escape') setViewer(null);
+          };
+          window.addEventListener('keydown', onKey);
+          return function () {
+            window.removeEventListener('keydown', onKey);
+          };
+        },
+        [viewer],
+      );
+      return h(
+        'div',
+        { className: 'cd-user-images' + (props.align === 'start' ? ' cd-images-start' : '') },
+        props.images.map(function (image) {
+          return h(ImageThumb, { key: image.id, image: image, onOpen: setViewer });
+        }),
+        viewer === null
+          ? null
+          : h(
+              'div',
+              {
+                className: 'cd-lightbox',
+                role: 'dialog',
+                'aria-modal': 'true',
+                'aria-label': viewer.name,
+                onClick: function () {
+                  setViewer(null);
+                },
+              },
+              h('img', { className: 'cd-lightbox-img', src: viewer.url, alt: viewer.name }),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'cd-lightbox-close',
+                  title: t('action.close'),
+                  'aria-label': t('action.close'),
+                  onClick: function (event) {
+                    event.stopPropagation();
+                    setViewer(null);
+                  },
+                },
+                h(Icon, { name: 'x', size: 18 }),
+              ),
+            ),
+      );
+    }
+
     function useMedia(query) {
       const read = function () {
         return typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : true;
@@ -1075,24 +1313,34 @@ window.__ModuleLoader__.load({
         const localOffset = view.getUint32(cursor + 42, true);
         const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength));
         cursor += 46 + nameLength + extraLength + commentLength;
-        if (/\.json$/i.test(name)) entries.set(name, { method, compressedSize, localOffset });
+        if (/\.(json|png|jpe?g|webp|gif|bmp)$/i.test(name)) {
+          entries.set(name, { method, compressedSize, localOffset });
+        }
       }
+      const read = async function (name) {
+        const entry = entries.get(name);
+        if (entry === undefined) return null;
+        const local = entry.localOffset;
+        if (local + 30 > bytes.length || view.getUint32(local, true) !== 0x04034b50) {
+          throw new Error('bad-local-header');
+        }
+        const nameLength = view.getUint16(local + 26, true);
+        const extraLength = view.getUint16(local + 28, true);
+        const start = local + 30 + nameLength + extraLength;
+        const raw = bytes.subarray(start, start + entry.compressedSize);
+        if (entry.method === 0) return raw;
+        if (entry.method === 8) return inflateRaw(raw);
+        throw new Error('unsupported-compression');
+      };
       return {
         names: Array.from(entries.keys()),
         async text(name) {
-          const entry = entries.get(name);
-          if (entry === undefined) return null;
-          const local = entry.localOffset;
-          if (local + 30 > bytes.length || view.getUint32(local, true) !== 0x04034b50) {
-            throw new Error('bad-local-header');
-          }
-          const nameLength = view.getUint16(local + 26, true);
-          const extraLength = view.getUint16(local + 28, true);
-          const start = local + 30 + nameLength + extraLength;
-          const raw = bytes.subarray(start, start + entry.compressedSize);
-          if (entry.method === 0) return decoder.decode(raw);
-          if (entry.method === 8) return decoder.decode(await inflateRaw(raw));
-          throw new Error('unsupported-compression');
+          const data = await read(name);
+          return data === null ? null : decoder.decode(data);
+        },
+        async bytes(name) {
+          const data = await read(name);
+          return data === null ? null : new Uint8Array(data);
         },
       };
     }
@@ -1147,7 +1395,7 @@ window.__ModuleLoader__.load({
      * @param session - one `chat_sessions/*.json` payload.
      * @returns a normalized thread, or null when nothing usable survives.
      */
-    function threadFromOfficialSession(session) {
+    async function threadFromOfficialSession(session, extractImage) {
       if (session === null || typeof session !== 'object') return null;
       const source = orderOfficialMessages(
         Array.isArray(session.messages) ? session.messages : [],
@@ -1161,6 +1409,7 @@ window.__ModuleLoader__.load({
         const texts = [];
         const thinks = [];
         const files = [];
+        const images = [];
         for (const fragment of Array.isArray(message.fragments) ? message.fragments : []) {
           if (fragment === null || typeof fragment !== 'object') continue;
           if (
@@ -1173,14 +1422,22 @@ window.__ModuleLoader__.load({
             if (typeof fragment.content === 'string' && fragment.content.trim() !== '') thinks.push(fragment.content);
           } else if (fragment.type === 'FILE' && Array.isArray(fragment.files)) {
             for (const file of fragment.files) {
-              if (file && typeof file.file_name === 'string' && file.file_name !== '') {
-                files.push({ name: file.file_name, text: '' });
+              if (file === null || typeof file !== 'object') continue;
+              const name = typeof file.file_name === 'string' ? file.file_name : '';
+              if (name === '') continue;
+              if (file.is_image === true && typeof extractImage === 'function') {
+                const stored = await extractImage(file);
+                if (stored !== null) {
+                  images.push(stored);
+                  continue;
+                }
               }
+              files.push({ name: name, text: '' });
             }
           }
         }
         const text = texts.join('\n\n').trim();
-        if (text === '' && files.length === 0) continue;
+        if (text === '' && files.length === 0 && images.length === 0) continue;
         const at = Date.parse(message.inserted_at);
         messages.push({
           id: newId('m'),
@@ -1189,6 +1446,7 @@ window.__ModuleLoader__.load({
           ...(Number.isFinite(at) ? { at: at } : {}),
           ...(thinks.length > 0 ? { reasoning: thinks.join('\n\n') } : {}),
           ...(files.length > 0 ? { files: files } : {}),
+          ...(images.length > 0 ? { images: images } : {}),
         });
       }
       if (messages.length === 0) return null;
@@ -1214,11 +1472,27 @@ window.__ModuleLoader__.load({
         return /^chat_sessions\/[^/]+\.json$/i.test(name);
       });
       if (names.length === 0) throw new Error('no-sessions');
+      /** Pull one referenced image out of the archive into the local image store. */
+      const extractImage = async function (entry) {
+        if (typeof entry.export_path !== 'string' || entry.export_path === '') return null;
+        const path = entry.export_path.replace(/^\.?\//, '');
+        let data = null;
+        try {
+          data = await zip.bytes(path);
+        } catch (error) {
+          data = null;
+        }
+        if (data === null || data.length === 0) return null;
+        const id = newId('img');
+        const name = typeof entry.file_name === 'string' ? entry.file_name : 'image';
+        await putImage(id, new Blob([data], { type: mimeForImageName(name) }));
+        return { id: id, name: name };
+      };
       const threads = [];
       for (const name of names) {
         try {
           const parsed = JSON.parse(await zip.text(name));
-          const thread = threadFromOfficialSession(parsed);
+          const thread = await threadFromOfficialSession(parsed, extractImage);
           if (thread !== null) threads.push(thread);
         } catch (error) {
           /* skip one malformed session file instead of failing the whole import */
@@ -3279,6 +3553,17 @@ window.__ModuleLoader__.load({
               'div',
               { className: 'cd-files' },
               props.attachments.map(function (file) {
+                if (file.kind === 'image') {
+                  return h(ImageChip, {
+                    key: file.id,
+                    imageId: file.imageId,
+                    name: file.name,
+                    removeLabel: t('action.delete'),
+                    onRemove: function () {
+                      props.onRemoveFile(file.id);
+                    },
+                  });
+                }
                 return h(
                   'span',
                   { key: file.id, className: 'cd-chip', title: file.name },
@@ -3438,6 +3723,7 @@ window.__ModuleLoader__.load({
               ref: fileRef,
               type: 'file',
               multiple: true,
+              accept: 'image/*,.txt,.md,.json,.csv,.log,.js,.ts,.py,.html,.css,.yml,.yaml',
               className: 'cd-file-input',
               'aria-hidden': 'true',
               tabIndex: -1,
@@ -4332,8 +4618,11 @@ window.__ModuleLoader__.load({
           if ((text === '' && attachments.length === 0) || pending) return;
           const targetId = activeId || newId('c');
           const stamp = Date.now();
-          const files = attachments.map(function (file) {
-            return { name: file.name, text: file.text };
+          const files = [];
+          const images = [];
+          attachments.forEach(function (file) {
+            if (file.kind === 'image') images.push({ id: file.imageId, name: file.name });
+            else files.push({ name: file.name, text: file.text });
           });
           const userMessage = {
             id: newId('u'),
@@ -4341,6 +4630,7 @@ window.__ModuleLoader__.load({
             text: text,
             at: stamp,
             ...(files.length > 0 ? { files: files } : {}),
+            ...(images.length > 0 ? { images: images } : {}),
           };
           const existing = threads.find(function (thread) {
             return thread.id === targetId;
@@ -4354,7 +4644,7 @@ window.__ModuleLoader__.load({
               return [
                 {
                   id: targetId,
-                  title: text.slice(0, 24) || (files[0] ? files[0].name : t('action.newChat')),
+                  title: text.slice(0, 24) || (files[0] ? files[0].name : images[0] ? images[0].name : t('action.newChat')),
                   updatedAt: stamp,
                   messages: [userMessage],
                 },
@@ -4489,6 +4779,20 @@ window.__ModuleLoader__.load({
             if (attachments.length >= 5) {
               showToast(t('toast.fileLimit'));
               break;
+            }
+            if (typeof file.type === 'string' && file.type.indexOf('image/') === 0) {
+              if (file.size > 12 * 1024 * 1024) {
+                showToast(t('toast.imageTooLarge'));
+                continue;
+              }
+              const blob = await prepareImageBlob(file);
+              const imageId = newId('img');
+              await putImage(imageId, blob);
+              setAttachments(function (previous) {
+                if (previous.length >= 5) return previous;
+                return previous.concat({ id: newId('f'), kind: 'image', name: file.name, imageId: imageId });
+              });
+              continue;
             }
             if (file.size > 512 * 1024) {
               showToast(t('toast.fileTooLarge'));
@@ -5431,6 +5735,9 @@ window.__ModuleLoader__.load({
                       }),
                     )
                   : null,
+                message.images && message.images.length > 0
+                  ? h(MessageImages, { t: t, images: message.images })
+                  : null,
                 message.text
                   ? h(
                       'div',
@@ -5472,6 +5779,9 @@ window.__ModuleLoader__.load({
                       highlight: hitClass(message) === '' ? '' : findNeedle,
                     })
                   : null,
+              message.images && message.images.length > 0
+                ? h(MessageImages, { t: t, images: message.images, align: 'start' })
+                : null,
               message.error
                 ? h(
                     'div',
@@ -5823,11 +6133,21 @@ window.__ModuleLoader__.load({
     /** Fold attached file text into the one user turn the model receives. */
     function composeMessageText(message) {
       const text = typeof message.text === 'string' ? message.text : '';
-      if (!message.files || message.files.length === 0) return text;
-      const blocks = message.files.map(function (file) {
-        return `【附件：${file.name}】\n${file.text}\n【附件结束】`;
-      });
-      return blocks.join('\n\n') + (text === '' ? '' : '\n\n' + text);
+      const parts = [];
+      if (message.images && message.images.length > 0) {
+        parts.push('【图片】' + message.images.map(function (image) { return image.name; }).join('、'));
+      }
+      if (message.files && message.files.length > 0) {
+        parts.push(
+          message.files
+            .map(function (file) {
+              return `【附件：${file.name}】\n${file.text}\n【附件结束】`;
+            })
+            .join('\n\n'),
+        );
+      }
+      if (text !== '') parts.push(text);
+      return parts.join('\n\n');
     }
 
     /* -------------------------------------------------------------------- css */
@@ -5936,6 +6256,17 @@ window.__ModuleLoader__.load({
 .cd-user{display:flex;flex-direction:column;align-items:flex-end;padding-bottom:16px}
 .cd-user:first-child{padding-top:34px}
 .cd-user-files{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-bottom:8px;max-width:100%}
+.cd-user-images{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-bottom:8px;max-width:100%}
+.cd-images-start{justify-content:flex-start}
+.cd-img-btn{max-width:220px;padding:0;border:none;border-radius:12px;background:transparent;line-height:0;cursor:pointer;overflow:hidden}
+.cd-img-thumb{display:block;max-width:220px;max-height:220px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;object-fit:cover}
+.cd-img-fallback{display:inline-flex;padding:8px 10px;border:1px dashed var(--dsw-alias-border-l2);border-radius:10px;color:var(--dsw-alias-label-tertiary);font-size:12px}
+.cd-chip-image{padding-left:4px}
+.cd-chip-thumb{width:22px;height:22px;border-radius:6px;object-fit:cover}
+.cd-lightbox{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;padding:32px;background:rgba(0,0,0,.72)}
+.cd-lightbox-img{max-width:min(92vw,1200px);max-height:86vh;border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,.4)}
+.cd-lightbox-close{position:absolute;top:18px;right:18px;display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;cursor:pointer}
+.cd-lightbox-close:hover{background:rgba(255,255,255,.24)}
 .cd-bubble{box-sizing:border-box;max-width:calc(100% - 88px);padding:10px 16px;border-radius:22px;background-color:var(--dsw-specific-bubble);color:var(--dsw-alias-label-primary);font-size:var(--cd-text-size);line-height:1.5;white-space:pre-wrap;word-break:break-word}
 @media (max-width:439px){.cd-bubble{max-width:calc(100% - 68px)}}
 .cd-assistant{padding-bottom:24px}

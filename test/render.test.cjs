@@ -505,7 +505,7 @@ function makeStoredZip(entries) {
   let offset = 0;
   for (const entry of entries) {
     const nameBytes = encoder.encode(entry.name);
-    const data = encoder.encode(entry.text);
+    const data = entry.bytes !== undefined ? new Uint8Array(entry.bytes) : encoder.encode(entry.text || '');
     const local = new Uint8Array(30 + nameBytes.length);
     const localView = new DataView(local.buffer);
     localView.setUint32(0, 0x04034b50, true);
@@ -1844,6 +1844,93 @@ async function main() {
       'the active branch keeps its order: ' + JSON.stringify(imported.messages.map((m) => m.text)),
     );
     console.log('PASS 41: a branched session imports only the active path');
+  }
+
+  /* --- 42. images can be attached and shown in the chat -------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
+    const file = new Blob([png], { type: 'image/png' });
+    file.name = '截图.png';
+    const input = byClass(tree, 'cd-file-input')[0];
+    input.props.onChange({ target: { files: [file], value: '' } });
+    await wait(40);
+    tree = rerender();
+    assert(byClass(tree, 'cd-chip-image').length === 1, 'the composer shows an image chip');
+    click(byClass(tree, 'cd-send')[0]);
+    await wait(560);
+    tree = rerender();
+    const saved = storedThreads(session.storage);
+    const thread = saved.find((candidate) => candidate.messages.some((m) => m.images && m.images.length > 0));
+    assert(thread, 'the sent message keeps its image reference');
+    assert(thread.messages[0].images[0].name === '截图.png', 'the image keeps its name');
+    assert(byClass(tree, 'cd-img-thumb').length >= 1, 'the bubble renders a thumbnail');
+    click(byClass(tree, 'cd-img-btn')[0]);
+    tree = rerender();
+    assert(byClass(tree, 'cd-lightbox').length === 1, 'clicking a thumbnail opens the lightbox');
+    session.emitWindow('keydown', { key: 'Escape' });
+    tree = rerender();
+    assert(byClass(tree, 'cd-lightbox').length === 0, 'Escape closes the lightbox');
+    console.log('PASS 42: images can be attached and shown');
+  }
+
+  /* --- 43. imported app images become thumbnails --------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-settings')[0]);
+    tree = rerender();
+    const modal = byClass(tree, 'cd-modal')[0];
+    const input = byClass(modal, 'cd-file-input')[0];
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
+    const official = {
+      id: 'session-img',
+      title: '带图片的 App 会话',
+      pinned: false,
+      inserted_at: '2026-01-04T00:00:00.000Z',
+      updated_at: '2026-01-04T00:01:00.000Z',
+      current_message_id: 1,
+      messages: [
+        {
+          id: 1,
+          parent_id: null,
+          role: 'USER',
+          inserted_at: '2026-01-04T00:00:01.000Z',
+          fragments: [
+            { type: 'REQUEST', content: '看这张图' },
+            {
+              type: 'FILE',
+              files: [
+                { file_name: 'pic.png', is_image: true, export_path: 'chat_sessions/session-img_files/pic.png' },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const archive = makeStoredZip([
+      { name: 'chat_sessions/session-img.json', text: JSON.stringify(official) },
+      { name: 'chat_sessions/session-img_files/pic.png', bytes: png },
+    ]);
+    input.props.onChange({
+      target: { files: [{ name: 'img.zip', arrayBuffer: async () => archive }], value: '' },
+    });
+    await wait(100);
+    tree = rerender();
+    const saved = storedThreads(session.storage);
+    const imported = saved.find((candidate) => candidate.title === '带图片的 App 会话');
+    assert(imported, 'the image session imports');
+    assert(
+      imported.messages[0].images && imported.messages[0].images[0].name === 'pic.png',
+      'the FILE fragment becomes a stored image',
+    );
+    assert(!imported.messages[0].files || imported.messages[0].files.length === 0, 'the image is not duplicated as a chip');
+    const close = collect(modal, (node) => node.kind === 'host' && node.props['aria-label'] === '关闭')[0];
+    if (close) click(close);
+    tree = rerender();
+    assert(byClass(tree, 'cd-img-thumb').length >= 1, 'the imported image renders as a thumbnail');
+    console.log('PASS 43: imported app images become thumbnails');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

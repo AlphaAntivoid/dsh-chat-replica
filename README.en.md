@@ -64,6 +64,7 @@ Light theme:
 - Any answer can be forked: the conversation is copied up to that answer into a new one titled "· fork", so you can continue in another direction; pin state is not inherited
 - A user message can be edited and re-answered: saving truncates to that message and discards what follows (Ctrl/Cmd+Enter saves, Esc cancels)
 - A single conversation can be exported as a **Markdown** reading copy; JSON remains the backup and re-import format
+- **Images**: the paperclip uploads images (downscaled to a 1600px long edge and stored in local IndexedDB); bubbles show thumbnails and clicking opens a lightbox (Esc closes). Images imported from a DeepSeek export ZIP are shown the same way
 - The top-right capsule is always there (find / read-aloud / new chat); both the sidebar toggle and the find button enter or leave with a `0.28s linear` horizontal animation, so starting a new chat collapses the find button smoothly
 - The sidebar itself slides too: its width transitions between 0 and 261px over 0.28s linear, in sync with the capsule
 - Find in a conversation: Ctrl/Cmd+F highlights matches, marks the current one solid, Enter / Shift+Enter jump, Esc closes
@@ -266,6 +267,7 @@ Restart DSH to take effect. To uninstall, remove that insert and the
 - A full localStorage is surfaced as a "local storage is full" toast instead of silently dropping changes
 - A render failure shows a fallback inside this panel (with retry) instead of blanking the whole page
 - Only a single conversation can be exported as Markdown; bulk export and import still use JSON
+- Images live only in the browser's IndexedDB (database `deepseek-chat-ui-images`); they are not part of the JSON / Markdown exports and are not sent to the model — the request only carries a `【图片】name` hint line
 - Context occupancy is an **approximation**: last billed input plus this turn's output, divided by the route's
   declared window. DSH has a token-meter pressure projection; this plugin has no equivalent live sampling. The
   segmented bar is likewise a character-count estimate (one token per CJK character, one per four ASCII
