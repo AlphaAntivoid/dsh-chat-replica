@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.18.1
+
+### 中文
+
+- 修复：胶囊的横向线性收起动画实际没有生效。`.cd-pill-expand` 单类选择器定义在 `.cd-iconbtn` 之前，后者的 `transition:background-color .2s,color .2s` 同优先级覆盖了宽度过渡，按钮只是瞬间跳到 `width:0`
+- 把过渡与收起态规则限定到 `.cd-pill` 下（`.cd-pill .cd-pill-expand` / `.cd-pill .cd-pill-expand-off`），宽度、透明度、间距的 `0.28s linear` 过渡现在真正生效
+- 样式测试改为强制「过渡规则必须限定在 `.cd-pill` 下」，防止再次被通用按钮样式覆盖
+- 用 headless Edge 实测确认：修复前 `transition-property` 是 `background-color, color`、宽度 38px→0 瞬间完成；修复后是 `width, opacity, margin-right`、`0.28s linear`，胶囊宽度从 118px 平滑过渡到 78px
+
+### English
+
+- Fixed: the capsule's horizontal linear collapse never actually ran. The single-class `.cd-pill-expand` rule came before `.cd-iconbtn`, whose `transition:background-color .2s,color .2s` overrode the width transition at equal specificity, so the button snapped to `width:0`
+- Scoped both rules under `.cd-pill` (`.cd-pill .cd-pill-expand` / `.cd-pill .cd-pill-expand-off`); the `0.28s linear` transition on width, opacity and spacing now applies
+- The stylesheet test now requires the transition rule to be scoped under `.cd-pill` so a generic button rule cannot silently win again
+- Measured in headless Edge: before the fix `transition-property` was `background-color, color` and the width jumped 38px→0; now it is `width, opacity, margin-right` with `0.28s linear`, and the capsule shrinks smoothly from 118px to 78px
+
 ## 1.18.0
 
 ### 中文

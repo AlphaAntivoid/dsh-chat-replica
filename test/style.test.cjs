@@ -114,13 +114,24 @@ if (duplicated.length > 0) {
   failures.push('classes with more than one base rule: ' + duplicated.join(', '));
 }
 
-/* 3. The capsule's sidebar toggle must shrink with a linear width transition. */
-const expandRule = CSS.match(/\.cd-pill-expand\{([^}]*)\}/);
-const offRule = CSS.match(/\.cd-pill\.cd-pill-expand-off[^{]*\{([^}]*)\}/) || CSS.match(/\.cd-pill-expand-off[^{]*\{([^}]*)\}/);
-if (!expandRule || !/transition:[^;}]*width[^;}]*linear/.test(expandRule[1])) {
+/* 3. The capsule's sidebar toggle must shrink with a linear width transition.
+ *    The rule has to be scoped under `.cd-pill` (two classes): a single-class
+ *    rule loses to the later `.cd-iconbtn` transition and the animation silently
+ *    dies — exactly the bug this guard exists for. */
+const RULES = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
+  selector: match[1].trim(),
+  body: match[2],
+}));
+const transitionRule = RULES.filter(
+  (rule) => /\.cd-pill[^{]*\.cd-pill-expand(?!-off)/.test(rule.selector) && /transition:/.test(rule.body),
+).pop();
+if (!transitionRule) {
+  failures.push('the capsule toggle transition must be scoped under .cd-pill (.cd-pill .cd-pill-expand)');
+} else if (!/transition:[^;}]*width[^;}]*linear/.test(transitionRule.body)) {
   failures.push('the capsule toggle needs a linear width transition (.cd-pill-expand)');
 }
-if (!offRule || !/width:0/.test(offRule[1])) {
+const offRule = RULES.filter((rule) => /\.cd-pill[^{]*\.cd-pill-expand-off/.test(rule.selector))[0];
+if (!offRule || !/width:0/.test(offRule.body)) {
   failures.push('the hidden capsule toggle needs width:0 (.cd-pill-expand-off)');
 }
 
