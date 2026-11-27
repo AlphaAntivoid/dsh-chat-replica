@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.21.1
+
+### 中文
+
+- 修复官方导出 ZIP 导入后消息错位：之前按 `inserted_at` 排序，而官方数据里回答的时间戳比提问早几毫秒，导致每一对问答被颠倒；现在改为沿 `parent_id` 链从根走到 `current_message_id`
+- 修复分支会话的「缺失」：编辑 / 重新生成留下的废弃分支不再混入，只导入当前可见的那条路径（实测那份导出有 1 个分支会话，1058 条消息中取 1056 条有效路径）
+- 真实导出复验：30 个会话全部按 user/assistant 正确交替，0 个错位
+- 测试：212 条断言（新增「回答时间早于提问仍保持顺序」与「分支只导入当前路径」）
+
+### English
+
+- Fixed misaligned messages after importing the official export ZIP: ordering used to sort by `inserted_at`, but the export stamps an answer a few milliseconds before its question, swapping every pair; ordering now follows the `parent_id` chain from the root to `current_message_id`
+- Fixed "missing" turns in branched sessions: abandoned edit/regenerate branches are no longer mixed in — only the visible active path is imported (the real export had one branched session, so 1056 of its 1058 messages form the active path)
+- Re-verified against the real export: all 30 conversations alternate user/assistant correctly with zero misalignments
+- Tests: 212 assertions (an answer stamped before its question keeps its order, and a branch imports only the active path)
+
 ## 1.21.0
 
 ### 中文

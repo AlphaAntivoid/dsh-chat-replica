@@ -1710,7 +1710,7 @@ async function main() {
           id: 2,
           parent_id: 1,
           role: 'ASSISTANT',
-          inserted_at: '2026-01-02T03:04:10.000Z',
+          inserted_at: '2026-01-02T03:04:04.995Z',
           fragments: [
             { type: 'THINK', content: '先想一想' },
             { type: 'RESPONSE', content: '你好，这是回答' },
@@ -1739,6 +1739,11 @@ async function main() {
     assert(imported.updatedAt === Date.parse('2026-01-02T03:05:00.000Z'), 'the updated time survives');
     assert(imported.messages.length === 2, 'both turns are imported');
     assert(imported.messages[0].text === '你好，App', 'the REQUEST fragment becomes the user text');
+    assert(imported.messages[0].role === 'user', 'the parent chain keeps the user turn first');
+    assert(
+      imported.messages[1].role === 'assistant',
+      'an assistant time stamped before its request must not reorder the pair',
+    );
     assert(imported.messages[1].text === '你好，这是回答', 'the RESPONSE fragment becomes the answer');
     assert(imported.messages[1].reasoning === '先想一想', 'the THINK fragment becomes the reasoning block');
     assert(
@@ -1770,6 +1775,75 @@ async function main() {
       'a broken archive reports the readable reason: ' + (status ? textOf(status) : 'none'),
     );
     console.log('PASS 40: a broken ZIP reports a readable reason');
+  }
+
+  /* --- 41. a branched session imports only the active path ----------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-settings')[0]);
+    tree = rerender();
+    const modal = byClass(tree, 'cd-modal')[0];
+    const input = byClass(modal, 'cd-file-input')[0];
+    const branched = {
+      id: 'session-branch',
+      title: '分支会话',
+      pinned: false,
+      inserted_at: '2026-01-03T00:00:00.000Z',
+      updated_at: '2026-01-03T00:10:00.000Z',
+      current_message_id: 4,
+      messages: [
+        {
+          id: 1,
+          parent_id: null,
+          role: 'USER',
+          inserted_at: '2026-01-03T00:00:01.000Z',
+          fragments: [{ type: 'REQUEST', content: '原问题' }],
+        },
+        {
+          id: 2,
+          parent_id: 1,
+          role: 'ASSISTANT',
+          inserted_at: '2026-01-03T00:00:02.000Z',
+          fragments: [{ type: 'RESPONSE', content: '旧回答' }],
+        },
+        {
+          id: 3,
+          parent_id: 1,
+          role: 'USER',
+          inserted_at: '2026-01-03T00:05:00.000Z',
+          fragments: [{ type: 'REQUEST', content: '改过的问题' }],
+        },
+        {
+          id: 4,
+          parent_id: 3,
+          role: 'ASSISTANT',
+          inserted_at: '2026-01-03T00:05:01.000Z',
+          fragments: [{ type: 'RESPONSE', content: '新回答' }],
+        },
+      ],
+    };
+    const archive = makeStoredZip([
+      { name: 'chat_sessions/session-branch.json', text: JSON.stringify(branched) },
+    ]);
+    input.props.onChange({
+      target: {
+        files: [{ name: 'branch.zip', arrayBuffer: async () => archive }],
+        value: '',
+      },
+    });
+    await wait(60);
+    tree = rerender();
+    const saved = storedThreads(session.storage);
+    const imported = saved.find((thread) => thread.title === '分支会话');
+    assert(imported, 'the branched session imports');
+    assert(imported.messages.length === 3, 'only the active path is imported: ' + imported.messages.length);
+    assert(
+      JSON.stringify(imported.messages.map((message) => message.text)) ===
+        JSON.stringify(['原问题', '改过的问题', '新回答']),
+      'the active branch keeps its order: ' + JSON.stringify(imported.messages.map((m) => m.text)),
+    );
+    console.log('PASS 41: a branched session imports only the active path');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

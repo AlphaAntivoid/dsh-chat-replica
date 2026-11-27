@@ -125,6 +125,7 @@ Settings → Data → Import history accepts two kinds of files:
   - `THINK` fragments become the collapsible "Thought" block under an answer
   - `FILE` fragments become attachment-name chips (images are not rendered here, only their names are kept)
   - `pinned`, `inserted_at` / `updated_at` become the pin state and timestamps; tool calls and search fragments are skipped
+  - Ordering follows the `parent_id` chain up to `current_message_id`: the export stamps an answer a few milliseconds *before* its question, so sorting by time would swap every pair; abandoned edit/regenerate branches are not imported
 
 Importing the same file twice is deduplicated by fingerprint, and a failed parse says whether the ZIP was unreadable, used an unsupported compression, or contained no conversations. Everything happens locally — nothing is uploaded.
 

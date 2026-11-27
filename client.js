@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.21.0';
+    const PLUGIN_VERSION = '1.21.1';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -1105,6 +1105,41 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The visible conversation is the parent chain ending at `current_message_id`
+     * — not the file order (branches) and not the timestamp order: the export
+     * stamps an assistant entry a few milliseconds *before* its request, so
+     * sorting by time swaps every user/assistant pair.
+     *
+     * @param messages - raw `session.messages`.
+     * @param currentId - `session.current_message_id` (the active leaf).
+     * @returns messages ordered from the root to the active leaf.
+     */
+    function orderOfficialMessages(messages, currentId) {
+      const list = messages.filter(function (message) {
+        return message !== null && typeof message === 'object';
+      });
+      const byId = new Map();
+      for (const message of list) {
+        if (message.id !== undefined && message.id !== null) byId.set(String(message.id), message);
+      }
+      const hasCurrent = currentId !== undefined && currentId !== null && byId.has(String(currentId));
+      const leaf = hasCurrent ? byId.get(String(currentId)) : list[list.length - 1];
+      const chain = [];
+      const seen = new Set();
+      let cursor = leaf;
+      while (cursor && !seen.has(String(cursor.id))) {
+        chain.push(cursor);
+        seen.add(String(cursor.id));
+        if (cursor.parent_id === undefined || cursor.parent_id === null) break;
+        cursor = byId.get(String(cursor.parent_id));
+      }
+      chain.reverse();
+      if (chain.length === list.length) return chain;
+      if (hasCurrent && chain.length > 1) return chain;
+      return list;
+    }
+
+    /**
      * Map one DeepSeek app export session onto this plugin's thread shape.
      * Request/response fragments become the message text, THINK becomes the
      * collapsible reasoning block, FILE entries become attachment chips.
@@ -1114,12 +1149,10 @@ window.__ModuleLoader__.load({
      */
     function threadFromOfficialSession(session) {
       if (session === null || typeof session !== 'object') return null;
-      const source = Array.isArray(session.messages) ? session.messages.slice() : [];
-      source.sort(function (left, right) {
-        const a = Date.parse(left && left.inserted_at);
-        const b = Date.parse(right && right.inserted_at);
-        return (Number.isFinite(a) ? a : 0) - (Number.isFinite(b) ? b : 0);
-      });
+      const source = orderOfficialMessages(
+        Array.isArray(session.messages) ? session.messages : [],
+        session.current_message_id,
+      );
       const messages = [];
       for (const message of source) {
         if (message === null || typeof message !== 'object') continue;
