@@ -3,6 +3,22 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.20.0
+
+### 中文
+
+- 胶囊里**所有会增减的按钮**统一走线性动画：侧栏开关与查找按钮改用通用 `.cd-pill-slot` / `.cd-pill-slot-off`，`0.28s linear` 过渡宽度、透明度与间距
+- 开启新对话后，查找按钮不再瞬间消失，而是横向收起；点回任意历史会话时再展开
+- 收起状态的按钮同时设 `aria-hidden` 与 `tabIndex=-1`，不可聚焦
+- 测试：197 条断言（新对话后查找槽位保持挂载、带收起类、重新展开）；样式测试继续校验「过渡规则必须限定在 `.cd-pill` 下」
+
+### English
+
+- Every capsule item that can appear or disappear now animates linearly: the sidebar toggle and the find button share `.cd-pill-slot` / `.cd-pill-slot-off`, a `0.28s linear` transition on width, opacity and spacing
+- Starting a new chat no longer removes the find button instantly; it collapses horizontally, and expands again when a conversation with history is opened
+- A collapsed slot is both `aria-hidden` and `tabIndex=-1`, so it cannot take focus
+- Tests: 197 assertions (after a new chat the find slot stays mounted, carries the collapsed class, and expands again); the stylesheet test still requires the transition to be scoped under `.cd-pill`
+
 ## 1.19.0
 
 ### 中文

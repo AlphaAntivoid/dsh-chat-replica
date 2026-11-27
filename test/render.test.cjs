@@ -1562,7 +1562,7 @@ async function main() {
     );
     const expandOff = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '打开边栏')[0];
     assert(
-      expandOff && String(expandOff.props.className).indexOf('cd-pill-expand-off') >= 0,
+      expandOff && String(expandOff.props.className).indexOf('cd-pill-slot-off') >= 0,
       'the sidebar toggle collapses away while the sidebar is open',
     );
 
@@ -1579,7 +1579,7 @@ async function main() {
     assert(pill, 'the capsule stays collapsed or open');
     const expandOn = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '打开边栏')[0];
     assert(
-      expandOn && String(expandOn.props.className).indexOf('cd-pill-expand-off') === -1,
+      expandOn && String(expandOn.props.className).indexOf('cd-pill-slot-off') === -1,
       'the sidebar toggle comes back in sync when the sidebar closes',
     );
     const findInPill = collect(pill, (node) => node.kind === 'host' && node.props['aria-label'] === '查找')[0];
@@ -1588,6 +1588,45 @@ async function main() {
     tree = rerender();
     assert(byClass(tree, 'cd-find').length === 1, 'the find bar opens from the capsule');
     console.log('PASS 37: the capsule keeps find and the sidebar slides in sync');
+  }
+
+  /* --- 38. capsule slots animate whenever the conversation changes --------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    const findSlot = () =>
+      collect(
+        byClass(tree, 'cd-pill')[0],
+        (node) => node.kind === 'host' && node.props['aria-label'] === '查找',
+      )[0];
+    assert(findSlot(), 'the find slot is rendered');
+    assert(
+      String(findSlot().props.className).indexOf('cd-pill-slot-off') === -1,
+      'the find slot starts open with history',
+    );
+    const newChat = collect(
+      byClass(tree, 'cd-pill')[0],
+      (node) => node.kind === 'host' && node.props['aria-label'] === '开启新对话',
+    )[0];
+    assert(newChat, 'the capsule offers a new chat action');
+    click(newChat);
+    tree = rerender();
+    const collapsed = findSlot();
+    assert(collapsed, 'the find slot stays mounted after starting a new chat');
+    assert(
+      String(collapsed.props.className).indexOf('cd-pill-slot-off') >= 0,
+      'the find slot collapses through its animation class',
+    );
+    assert(collapsed.props['aria-hidden'] === 'true', 'the collapsed find slot leaves assistive tech');
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    assert(
+      String(findSlot().props.className).indexOf('cd-pill-slot-off') === -1,
+      'the find slot expands again once the conversation has history',
+    );
+    console.log('PASS 38: capsule slots animate whenever the conversation changes');
   }
 
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');

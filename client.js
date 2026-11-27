@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.19.0';
+    const PLUGIN_VERSION = '1.20.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -5391,8 +5391,8 @@ window.__ModuleLoader__.load({
               {
                 type: 'button',
                 className:
-                  'cd-iconbtn cd-iconbtn-lg cd-pill-expand' +
-                  (sidebarVisible ? ' cd-pill-expand-off' : ''),
+                  'cd-iconbtn cd-iconbtn-lg cd-pill-slot' +
+                  (sidebarVisible ? ' cd-pill-slot-off' : ''),
                 title: t('action.expand'),
                 'aria-label': t('action.expand'),
                 'aria-hidden': sidebarVisible ? 'true' : 'false',
@@ -5404,19 +5404,21 @@ window.__ModuleLoader__.load({
               },
               h(Icon, { name: 'menu', size: 22, strokeWidth: 2 }),
             ),
-            hasMessages
-              ? h(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'cd-iconbtn cd-iconbtn-lg',
-                    title: t('find.open'),
-                    'aria-label': t('find.open'),
-                    onClick: openFind,
-                  },
-                  h(Icon, { name: 'search', size: 22, strokeWidth: 2 }),
-                )
-              : null,
+            h(
+              'button',
+              {
+                type: 'button',
+                className:
+                  'cd-iconbtn cd-iconbtn-lg cd-pill-slot' +
+                  (hasMessages ? '' : ' cd-pill-slot-off'),
+                title: t('find.open'),
+                'aria-label': t('find.open'),
+                'aria-hidden': hasMessages ? 'false' : 'true',
+                tabIndex: hasMessages ? 0 : -1,
+                onClick: openFind,
+              },
+              h(Icon, { name: 'search', size: 22, strokeWidth: 2 }),
+            ),
             h(
               'button',
               {
@@ -5706,8 +5708,9 @@ window.__ModuleLoader__.load({
 .cd-act-on{color:var(--dsw-alias-brand-text)}
 .cd-pill{position:absolute;top:12px;right:16px;z-index:20;display:flex;align-items:center;gap:2px;height:48px;padding:0 4px;border:1px solid var(--dsw-alias-border-l2);border-radius:100px;background:var(--dsw-alias-bg-layer-3);box-shadow:0 4px 12px rgba(0,0,0,.04)}
 /* 展开侧栏时左侧「边栏」按钮横向线性收起，胶囊随之变窄 */
-.cd-pill .cd-pill-expand{overflow:hidden;transition:width .28s linear,opacity .28s linear,margin-right .28s linear}
-.cd-pill .cd-pill-expand-off{width:0;margin-right:-2px;opacity:0;pointer-events:none}
+/* 胶囊里可增减的按钮：横向线性收起/展开（侧栏开关、查找） */
+.cd-pill .cd-pill-slot{overflow:hidden;transition:width .28s linear,opacity .28s linear,margin-right .28s linear}
+.cd-pill .cd-pill-slot-off{width:0;margin-right:-2px;opacity:0;pointer-events:none}
 .cd-body{display:flex;flex:1;flex-direction:column;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
 .cd-column{box-sizing:border-box;width:calc(var(--cd-maxw) - 2 * var(--cd-pad));max-width:calc(100% - 40px);margin:0 auto;padding-bottom:24px}
 .cd-welcome{box-sizing:border-box;display:flex;flex:1;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 16px}

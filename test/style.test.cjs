@@ -123,16 +123,16 @@ const RULES = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
   body: match[2],
 }));
 const transitionRule = RULES.filter(
-  (rule) => /\.cd-pill[^{]*\.cd-pill-expand(?!-off)/.test(rule.selector) && /transition:/.test(rule.body),
+  (rule) => /\.cd-pill[^{]*\.cd-pill-slot(?!-off)/.test(rule.selector) && /transition:/.test(rule.body),
 ).pop();
 if (!transitionRule) {
-  failures.push('the capsule toggle transition must be scoped under .cd-pill (.cd-pill .cd-pill-expand)');
+  failures.push('the capsule toggle transition must be scoped under .cd-pill (.cd-pill .cd-pill-slot)');
 } else if (!/transition:[^;}]*width[^;}]*linear/.test(transitionRule.body)) {
-  failures.push('the capsule toggle needs a linear width transition (.cd-pill-expand)');
+  failures.push('the capsule toggle needs a linear width transition (.cd-pill-slot)');
 }
-const offRule = RULES.filter((rule) => /\.cd-pill[^{]*\.cd-pill-expand-off/.test(rule.selector))[0];
+const offRule = RULES.filter((rule) => /\.cd-pill[^{]*\.cd-pill-slot-off/.test(rule.selector))[0];
 if (!offRule || !/width:0/.test(offRule.body)) {
-  failures.push('the hidden capsule toggle needs width:0 (.cd-pill-expand-off)');
+  failures.push('the hidden capsule toggle needs width:0 (.cd-pill-slot-off)');
 }
 
 /* 4. The sidebar wrapper must slide with the same linear duration as the
