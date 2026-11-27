@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.23.1';
+    const PLUGIN_VERSION = '1.24.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -244,11 +244,11 @@ window.__ModuleLoader__.load({
       'toast.asrFailed': '语音识别失败',
       'toast.emptyTranscript': '没有识别到内容',
       'toast.tooShort': '录音太短，请再说一次',
-      'toast.fileTooLarge': '文件超过 512 KB',
-      'toast.imageTooLarge': '图片超过 12 MB',
+      'toast.fileTooLarge': '文本文件超过 32 MB',
+      'toast.imageTooLarge': '图片超过 64 MB',
       'toast.fileUnsupported': '只支持文本类文件（代码、txt、md、csv 等）',
       'toast.imageUnsupported': '图片读取失败',
-      'toast.fileLimit': '最多附带 5 个文件',
+      'toast.fileLimit': '最多附带 50 个文件',
       'toast.network': '服务未响应，请稍后重试',
       'transcribing': '识别中…',
       'search.running': '正在搜索网页…',
@@ -436,11 +436,11 @@ window.__ModuleLoader__.load({
       'toast.asrFailed': 'Speech recognition failed',
       'toast.emptyTranscript': 'No speech detected',
       'toast.tooShort': 'Recording too short',
-      'toast.fileTooLarge': 'File is larger than 512 KB',
-      'toast.imageTooLarge': 'Image is larger than 12 MB',
+      'toast.fileTooLarge': 'Text files are limited to 32 MB',
+      'toast.imageTooLarge': 'Images are limited to 64 MB',
       'toast.fileUnsupported': 'Text files only (code, txt, md, csv…)',
       'toast.imageUnsupported': 'Could not read this image',
-      'toast.fileLimit': 'At most 5 attachments',
+      'toast.fileLimit': 'At most 50 attachments',
       'toast.network': 'The service did not respond — try again',
       'transcribing': 'Transcribing…',
       'search.running': 'Searching the web…',
@@ -806,10 +806,20 @@ window.__ModuleLoader__.load({
 
     const IMAGE_DB_NAME = 'deepseek-chat-ui-images';
     const IMAGE_STORE = 'images';
+    const FILE_STORE = 'files';
     const IMAGE_MAX_DIMENSION = 1600;
     const IMAGE_KEEP_BYTES = 400 * 1024;
+    /** Upload limits mirror the DeepSeek app: 50 files, 64 MiB images, 32 MiB text. */
+    const ATTACHMENT_LIMIT = 50;
+    const IMAGE_FILE_LIMIT = 64 * 1024 * 1024;
+    const TEXT_FILE_LIMIT = 32 * 1024 * 1024;
+    /** How much of one attachment is actually sent to the model. */
+    const REQUEST_TEXT_LIMIT = 200 * 1024;
+    /** Very large images are stored as-is instead of being decoded for resizing. */
+    const IMAGE_SKIP_RESIZE_BYTES = 8 * 1024 * 1024;
     /** In-memory fallback when IndexedDB is unavailable (tests, private modes). */
     const memoryImages = new Map();
+    const memoryFiles = new Map();
     let imageDbPromise = null;
 
     function imageDb() {
@@ -819,10 +829,13 @@ window.__ModuleLoader__.load({
           reject(new Error('no-idb'));
           return;
         }
-        const request = indexedDB.open(IMAGE_DB_NAME, 1);
+        const request = indexedDB.open(IMAGE_DB_NAME, 2);
         request.onupgradeneeded = function () {
           if (!request.result.objectStoreNames.contains(IMAGE_STORE)) {
             request.result.createObjectStore(IMAGE_STORE);
+          }
+          if (!request.result.objectStoreNames.contains(FILE_STORE)) {
+            request.result.createObjectStore(FILE_STORE);
           }
         };
         request.onsuccess = function () {
@@ -873,9 +886,49 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /** Persist one text file body (large attachments never enter localStorage). */
+    async function putStoredFile(id, content) {
+      try {
+        const db = await imageDb();
+        await new Promise(function (resolve, reject) {
+          const tx = db.transaction(FILE_STORE, 'readwrite');
+          tx.objectStore(FILE_STORE).put(content, id);
+          tx.oncomplete = function () {
+            resolve();
+          };
+          tx.onerror = function () {
+            reject(tx.error);
+          };
+        });
+      } catch (error) {
+        memoryFiles.set(id, content);
+      }
+    }
+
+    async function getStoredFileText(id) {
+      if (memoryFiles.has(id)) return memoryFiles.get(id);
+      try {
+        const db = await imageDb();
+        const value = await new Promise(function (resolve, reject) {
+          const tx = db.transaction(FILE_STORE, 'readonly');
+          const request = tx.objectStore(FILE_STORE).get(id);
+          request.onsuccess = function () {
+            resolve(request.result);
+          };
+          request.onerror = function () {
+            reject(request.error);
+          };
+        });
+        return typeof value === 'string' ? value : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
     /** Downscale before storing; the original survives when resizing is unavailable. */
     async function prepareImageBlob(file) {
       try {
+        if (file.size > IMAGE_SKIP_RESIZE_BYTES) return file;
         if (typeof createImageBitmap !== 'function' || typeof document === 'undefined' || !document.createElement) {
           return file;
         }
@@ -1511,7 +1564,7 @@ window.__ModuleLoader__.load({
      * @param session - one `chat_sessions/*.json` payload.
      * @returns a normalized thread, or null when nothing usable survives.
      */
-    async function threadFromOfficialSession(session, extractImage) {
+    async function threadFromOfficialSession(session, extractImage, extractFile) {
       if (session === null || typeof session !== 'object') return null;
       const source = orderOfficialMessages(
         Array.isArray(session.messages) ? session.messages : [],
@@ -1545,6 +1598,13 @@ window.__ModuleLoader__.load({
                 const stored = await extractImage(file);
                 if (stored !== null) {
                   images.push(stored);
+                  continue;
+                }
+              }
+              if (typeof extractFile === 'function') {
+                const storedFile = await extractFile(file);
+                if (storedFile !== null) {
+                  files.push(storedFile);
                   continue;
                 }
               }
@@ -1604,11 +1664,37 @@ window.__ModuleLoader__.load({
         await putImage(id, new Blob([data], { type: mimeForImageName(name) }));
         return { id: id, name: name };
       };
+      /**
+       * Pull one referenced non-image attachment out of the archive. Large text
+       * bodies go to IndexedDB so imported conversations stay small in storage.
+       */
+      const extractFile = async function (entry) {
+        if (typeof entry.export_path !== 'string' || entry.export_path === '') return null;
+        const path = entry.export_path.replace(/^\.?\//, '');
+        let data = null;
+        try {
+          data = await zip.bytes(path);
+        } catch (error) {
+          data = null;
+        }
+        if (data === null || data.length === 0 || data.length > TEXT_FILE_LIMIT) return null;
+        let text = '';
+        try {
+          text = new TextDecoder('utf-8').decode(data);
+        } catch (error) {
+          return null;
+        }
+        if (text.indexOf('\u0000') >= 0) return null;
+        const name = typeof entry.file_name === 'string' ? entry.file_name : 'file.txt';
+        const fileId = newId('file');
+        await putStoredFile(fileId, text);
+        return { name: name, size: text.length, text: '', fileId: fileId };
+      };
       const threads = [];
       for (const name of names) {
         try {
           const parsed = JSON.parse(await zip.text(name));
-          const thread = await threadFromOfficialSession(parsed, extractImage);
+          const thread = await threadFromOfficialSession(parsed, extractImage, extractFile);
           if (thread !== null) threads.push(thread);
         } catch (error) {
           /* skip one malformed session file instead of failing the whole import */
@@ -1685,7 +1771,12 @@ window.__ModuleLoader__.load({
           fileIndex += 1;
           const name = safeArchiveName(file && file.name, 'file-' + fileIndex + '.txt');
           const path = filesDir + '/' + id + '-' + fileIndex + '-' + name;
-          const bytes = encoder.encode(typeof file?.text === 'string' ? file.text : '');
+          let content = typeof file?.text === 'string' ? file.text : '';
+          if (content === '' && typeof file?.fileId === 'string') {
+            const stored = await getStoredFileText(file.fileId);
+            if (typeof stored === 'string') content = stored;
+          }
+          const bytes = encoder.encode(content);
           entries.push({ name: path, bytes: bytes });
           files.push({
             id: makeUuid(),
@@ -1771,6 +1862,24 @@ window.__ModuleLoader__.load({
       return makeZipArchive(entries);
     }
 
+    /** Move any inline attachment bodies imported from JSON into IndexedDB. */
+    async function offloadFileBodies(threads) {
+      for (const thread of threads) {
+        for (const message of thread.messages) {
+          if (!Array.isArray(message.files)) continue;
+          for (const file of message.files) {
+            if (typeof file.text !== 'string' || file.text === '') continue;
+            const fileId = newId('file');
+            await putStoredFile(fileId, file.text);
+            file.fileId = fileId;
+            file.size = file.text.length;
+            file.text = '';
+          }
+        }
+      }
+      return threads;
+    }
+
     /** 导入去重用的指纹：标题 + 更新时间 + 消息数 + 首条消息开头。 */
     function threadFingerprint(thread) {
       const first =
@@ -1780,20 +1889,35 @@ window.__ModuleLoader__.load({
       return [thread.title, thread.updatedAt, thread.messages.length, first].join('\u0001');
     }
 
-    function exportThread(thread) {
+    async function exportThread(thread) {
+      const messages = [];
+      for (const message of thread.messages) {
+        const files = [];
+        for (const file of Array.isArray(message.files) ? message.files : []) {
+          let text = typeof file.text === 'string' ? file.text : '';
+          if (text === '' && typeof file.fileId === 'string') {
+            const stored = await getStoredFileText(file.fileId);
+            if (typeof stored === 'string') text = stored;
+          }
+          files.push({
+            name: file.name,
+            text: text,
+            ...(typeof file.size === 'number' ? { size: file.size } : {}),
+          });
+        }
+        messages.push({
+          role: message.role,
+          text: message.text,
+          ...(typeof message.at === 'number' ? { at: message.at } : {}),
+          ...(pickUsage(message.usage) === null ? {} : { usage: pickUsage(message.usage) }),
+          ...(files.length > 0 ? { files: files } : {}),
+        });
+      }
       return {
         title: thread.title,
         updatedAt: thread.updatedAt,
         ...(typeof thread.pinnedAt === 'number' ? { pinnedAt: thread.pinnedAt } : {}),
-        messages: thread.messages.map(function (message) {
-          return {
-            role: message.role,
-            text: message.text,
-            ...(typeof message.at === 'number' ? { at: message.at } : {}),
-            ...(pickUsage(message.usage) === null ? {} : { usage: pickUsage(message.usage) }),
-            ...(message.files && message.files.length > 0 ? { files: message.files } : {}),
-          };
-        }),
+        messages: messages,
       };
     }
 
@@ -4787,9 +4911,11 @@ window.__ModuleLoader__.load({
             search: webSearch === true,
             ...(modelChoiceRef.current ? { model: modelChoiceRef.current } : {}),
             query: lastUser && typeof lastUser.text === 'string' ? lastUser.text : '',
-            messages: history.map(function (message) {
-              return { role: message.role, text: composeMessageText(message) };
-            }),
+            messages: await Promise.all(
+              history.map(async function (message) {
+                return { role: message.role, text: await composeMessageText(message) };
+              }),
+            ),
           };
           try {
             const response = await fetch(`${API}/chat`, {
@@ -4916,7 +5042,14 @@ window.__ModuleLoader__.load({
           const images = [];
           attachments.forEach(function (file) {
             if (file.kind === 'image') images.push({ id: file.imageId, name: file.name });
-            else files.push({ name: file.name, text: file.text });
+            else {
+              files.push({
+                name: file.name,
+                text: file.text,
+                ...(typeof file.size === 'number' ? { size: file.size } : {}),
+                ...(typeof file.fileId === 'string' ? { fileId: file.fileId } : {}),
+              });
+            }
           });
           const userMessage = {
             id: newId('u'),
@@ -5070,12 +5203,12 @@ window.__ModuleLoader__.load({
         async function (fileList) {
           const picked = Array.prototype.slice.call(fileList);
           for (const file of picked) {
-            if (attachments.length >= 5) {
+            if (attachments.length >= ATTACHMENT_LIMIT) {
               showToast(t('toast.fileLimit'));
               break;
             }
             if (typeof file.type === 'string' && file.type.indexOf('image/') === 0) {
-              if (file.size > 12 * 1024 * 1024) {
+              if (file.size > IMAGE_FILE_LIMIT) {
                 showToast(t('toast.imageTooLarge'));
                 continue;
               }
@@ -5083,12 +5216,12 @@ window.__ModuleLoader__.load({
               const imageId = newId('img');
               await putImage(imageId, blob);
               setAttachments(function (previous) {
-                if (previous.length >= 5) return previous;
+                if (previous.length >= ATTACHMENT_LIMIT) return previous;
                 return previous.concat({ id: newId('f'), kind: 'image', name: file.name, imageId: imageId });
               });
               continue;
             }
-            if (file.size > 512 * 1024) {
+            if (file.size > TEXT_FILE_LIMIT) {
               showToast(t('toast.fileTooLarge'));
               continue;
             }
@@ -5103,10 +5236,17 @@ window.__ModuleLoader__.load({
               showToast(t('toast.fileUnsupported'));
               continue;
             }
+            const fileId = newId('file');
+            await putStoredFile(fileId, content);
             setAttachments(function (previous) {
-              if (previous.length >= 5) return previous;
-              const name = file.name;
-              return previous.concat({ id: newId('f'), name: name, text: content });
+              if (previous.length >= ATTACHMENT_LIMIT) return previous;
+              return previous.concat({
+                id: newId('f'),
+                name: file.name,
+                size: content.length,
+                text: '',
+                fileId: fileId,
+              });
             });
           }
         },
@@ -5411,7 +5551,11 @@ window.__ModuleLoader__.load({
             const response = await fetch(`${API}/export`, {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ threads: source.map(exportThread), dir: dir, format: wanted }),
+              body: JSON.stringify({
+                threads: await Promise.all(source.map(exportThread)),
+                dir: dir,
+                format: wanted,
+              }),
             });
             const text = await response.text();
             let body = {};
@@ -5565,6 +5709,7 @@ window.__ModuleLoader__.load({
               if (list === null) throw new Error('bad-format');
               imported = normalizeThreads(list);
             }
+            imported = await offloadFileBodies(imported);
             if (imported.length === 0) throw new Error('empty');
             /** 同一个文件导入两次、或文件内部有重复条目，都只保留一份。 */
             const seen = {};
@@ -6467,20 +6612,22 @@ window.__ModuleLoader__.load({
     }
 
     /** Fold attached file text into the one user turn the model receives. */
-    function composeMessageText(message) {
+    async function composeMessageText(message) {
       const text = typeof message.text === 'string' ? message.text : '';
       const parts = [];
       if (message.images && message.images.length > 0) {
         parts.push('【图片】' + message.images.map(function (image) { return image.name; }).join('、'));
       }
-      if (message.files && message.files.length > 0) {
-        parts.push(
-          message.files
-            .map(function (file) {
-              return `【附件：${file.name}】\n${file.text}\n【附件结束】`;
-            })
-            .join('\n\n'),
-        );
+      for (const file of Array.isArray(message.files) ? message.files : []) {
+        let content = typeof file.text === 'string' ? file.text : '';
+        if (content === '' && typeof file.fileId === 'string') {
+          const stored = await getStoredFileText(file.fileId);
+          if (typeof stored === 'string') content = stored;
+        }
+        if (content.length > REQUEST_TEXT_LIMIT) {
+          content = content.slice(0, REQUEST_TEXT_LIMIT) + '\n…（已截断，完整文件保留在本地）';
+        }
+        parts.push(content === '' ? `【附件：${file.name}】（内容保存在本地）` : `【附件：${file.name}】\n${content}\n【附件结束】`);
       }
       if (text !== '') parts.push(text);
       return parts.join('\n\n');

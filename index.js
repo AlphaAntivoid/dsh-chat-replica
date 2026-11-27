@@ -30,6 +30,7 @@ const SYSTEM_PROMPT = [
 
 const ROUTE_PREFIX = '/chat-replica';
 const MAX_CHAT_BODY = 4 * 1024 * 1024;
+const MAX_EXPORT_BODY = 64 * 1024 * 1024;
 const MAX_AUDIO_BODY = 8 * 1024 * 1024;
 const MAX_ARCHIVE_BODY = 96 * 1024 * 1024;
 
@@ -759,7 +760,7 @@ async function exportOfficialArchive(req, res, url) {
 async function exportConversations(req, res) {
   let payload;
   try {
-    payload = JSON.parse((await readBody(req, MAX_CHAT_BODY)).toString('utf8') || '{}');
+    payload = JSON.parse((await readBody(req, MAX_EXPORT_BODY)).toString('utf8') || '{}');
   } catch (error) {
     return sendJson(res, 400, { error: 'bad-json', message: messageOf(error) });
   }

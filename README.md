@@ -64,6 +64,7 @@
 - 单条会话可导出为 **Markdown** 阅读稿；JSON 仍用于备份与再导入
 - **导出也可选 DeepSeek 官方格式**：生成与 App 导出同结构的 ZIP（`manifest.json` / `user.json` / `chat_session_index.json` / `chat_sessions/<id>.json` + `_files/` 图片），本插件的导入能原样读回
 - **图片**：回形针可上传图片（自动缩放到最长边 1600px 后存进本地 IndexedDB），气泡里显示缩略图，点开是大图灯箱（Esc 关闭）；从 DeepSeek 导出 ZIP 导入的图片附件同样会显示
+- **附件限制与 App 对齐**：每条对话最多 50 个附件；图片 ≤ 64 MB，文本类文件 ≤ 32 MB。正文大的文件存进 IndexedDB（不进 localStorage），发给模型时每份附件最多 200 KiB，超出会标注「已截断」
 - 右上角是常驻操作胶囊（查找 / 朗读 / 新对话）；侧栏开关与查找按钮的增减都走 `0.28s linear` 横向动画，开新对话时查找按钮会平滑收起
 - 侧边栏本身也是滑入 / 滑出的：宽度在 0 与 261px 之间以 0.28s linear 过渡，和胶囊的收缩同步
 - 会话内查找：`Ctrl/Cmd+F`，命中词高亮、当前命中实色，回车 / Shift+回车上下跳转，Esc 关闭
@@ -271,6 +272,7 @@ tar -czf dsh-chat-replica.tar.gz dsh-chat-replica
 - 「删除」只有 8 秒撤销窗口（提示条上的「撤销」）；超时，或期间再次删除其他会话会覆盖撤销快照，之后不可恢复
 - Markdown 导出目前只支持单条会话；批量导出与导入仍使用 JSON
 - 图片只存在浏览器的 IndexedDB（数据库 `deepseek-chat-ui-images`），不会进入 JSON / Markdown 导出，也不会发给模型；请求里只带一行「【图片】文件名」提示
+- 附件限制对齐官方 App（50 个/条、图片 64 MB、文本 32 MB），但**格式**仍只支持文本类与图片：App 支持的 PDF / Word / Excel / PPT（100 MB）不在解析范围内
 - 上下文占用是**近似值**：上一次计费输入 + 本轮输出，除以 route 声明的窗口；DSH 那边有 token-meter 的压力投影，这里没有等价的实时采样。分段条同理，是按字符数的估算（CJK 1 字 ≈ 1 token、ASCII 4 字符 ≈ 1 token），不是 provider 的精确分词
 
 ## 复刻来源

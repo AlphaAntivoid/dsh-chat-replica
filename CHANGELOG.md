@@ -3,6 +3,26 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.24.0
+
+### 中文
+
+- 上传限制对齐官方 App：每条对话最多 **50 个附件**，**图片 ≤ 64 MB**，**文本类文件 ≤ 32 MB**（App 对 PDF/Word/PPT 的 100 MB 上限不在本插件解析范围内）
+- 文本附件正文改存 IndexedDB（`files` 对象仓库）：localStorage 里只留文件名/大小，50 个大文件也不会撑爆 5 MB 配额
+- 发给模型的每份附件正文最多 200 KiB，超出自动截断并标注；完整内容仍保留在本地
+- JSON 导入里内联的附件正文会自动迁移到 IndexedDB；JSON / Markdown / 官方格式导出都会把正文读回来写入
+- Host 的导出请求体上限从 4 MB 提到 64 MB，大附件导出不再 413
+- 测试：239 条断言（300 KB 附件进 IDB、请求截断、localStorage 仍很小、33 MB 文本 / 65 MB 图片被拒）
+
+### English
+
+- Upload limits now match the official app: up to **50 attachments** per conversation, **images ≤ 64 MB** and **text files ≤ 32 MB** (the app's 100 MB cap for PDF/Word/PPT is outside this plugin's parsing support)
+- Text attachment bodies moved to IndexedDB (the `files` store): localStorage keeps only names and sizes, so 50 large files cannot blow the 5 MB quota
+- Each attachment sends at most 200 KiB to the model, marked as truncated, while the full body stays local
+- Inline bodies imported from JSON are migrated into IndexedDB automatically; JSON, Markdown and official-format exports read the bodies back
+- The Host export request limit rose from 4 MB to 64 MB so large attachments no longer hit 413
+- Tests: 239 assertions (300 KB attachment in IndexedDB, request truncation, small localStorage, 33 MB text and 65 MB image rejected)
+
 ## 1.23.1
 
 ### 中文

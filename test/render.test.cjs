@@ -2007,6 +2007,78 @@ async function main() {
     console.log('PASS 44: export in the official format and round-trip it');
   }
 
+  /* --- 45. attachments follow the official app limits ---------------------- */
+  {
+    let captured = null;
+    const session = mount(undefined, {
+      fetch: async (url, init) => {
+        if (String(url).indexOf('/chat') >= 0) {
+          captured = init && init.body ? JSON.parse(init.body) : null;
+          return {
+            ok: true,
+            body: {
+              getReader() {
+                return { read: async () => ({ done: true }) };
+              },
+            },
+          };
+        }
+        return { ok: true, json: async () => ({}), text: async () => '{}' };
+      },
+    });
+    let tree = renderPanel(session);
+    const bigText = 'A'.repeat(300 * 1024);
+    const file = { name: 'big.txt', type: 'text/plain', size: bigText.length, text: async () => bigText };
+    byClass(tree, 'cd-file-input')[0].props.onChange({ target: { files: [file], value: '' } });
+    await wait(80);
+    tree = rerender();
+    assert(byClass(tree, 'cd-chip').length === 1, 'a 300 KB text file becomes one chip');
+    click(byClass(tree, 'cd-send')[0]);
+    await wait(560);
+    assert(captured, 'the request payload is captured');
+    const sent = captured.messages[captured.messages.length - 1].text;
+    assert(sent.indexOf('A'.repeat(64)) >= 0, 'the attachment body reaches the request');
+    assert(sent.indexOf('已截断') >= 0, 'the oversized attachment is truncated for the model');
+    const saved = storedThreads(session.storage);
+    const stored = saved.find((thread) => thread.messages.some((m) => m.files && m.files.length));
+    assert(stored, 'the conversation keeps the attachment reference');
+    assert(typeof stored.messages[0].files[0].fileId === 'string', 'large bodies live in IndexedDB');
+    assert(stored.messages[0].files[0].text === '', 'the large body is not inlined into the message');
+    assert(
+      session.storage.get('deepseek-chat-ui.threads.v1').length < 64 * 1024,
+      'localStorage stays small even with a 300 KB attachment',
+    );
+
+    tree = rerender();
+    const hugeText = {
+      name: 'huge.txt',
+      type: 'text/plain',
+      size: 33 * 1024 * 1024,
+      text: async () => {
+        throw new Error('the size is rejected before reading');
+      },
+    };
+    byClass(tree, 'cd-file-input')[0].props.onChange({ target: { files: [hugeText], value: '' } });
+    await wait(40);
+    tree = rerender();
+    const textToast = byClass(tree, 'cd-toast')[0];
+    assert(
+      textToast && textOf(textToast).indexOf('32 MB') >= 0,
+      'a 33 MB text file is rejected with the app limit: ' + (textToast ? textOf(textToast) : 'none'),
+    );
+
+    const hugeImage = { name: 'huge.png', type: 'image/png', size: 65 * 1024 * 1024 };
+    byClass(tree, 'cd-file-input')[0].props.onChange({ target: { files: [hugeImage], value: '' } });
+    await wait(40);
+    tree = rerender();
+    const imageToast = byClass(tree, 'cd-toast')[0];
+    assert(
+      imageToast && textOf(imageToast).indexOf('64 MB') >= 0,
+      'a 65 MB image is rejected with the app limit: ' + (imageToast ? textOf(imageToast) : 'none'),
+    );
+    console.log('PASS 45: attachments follow the official app limits');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 
