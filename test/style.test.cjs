@@ -155,6 +155,22 @@ if (sidebarMs === null) {
   failures.push('the sidebar and capsule width transitions must share one duration (' + sidebarMs + 'ms vs ' + capsuleMs + 'ms)');
 }
 
+/* 5. The jump-to-bottom button fades with a linear opacity transition, and its
+ *    visible state is the only thing that raises opacity above zero. */
+const jumpRule = RULES.find((rule) => rule.selector.endsWith('.cd-jump'));
+if (!jumpRule) {
+  failures.push('the jump-to-bottom button is missing (.cd-jump)');
+} else {
+  if (!/opacity:0/.test(jumpRule.body)) failures.push('the hidden .cd-jump button needs opacity:0');
+  if (!/transition:[^;}]*opacity\s+\.28s\s+linear/.test(jumpRule.body)) {
+    failures.push('the .cd-jump button needs a linear opacity transition (.28s)');
+  }
+}
+const jumpOn = RULES.find((rule) => rule.selector.endsWith('.cd-jump-on'));
+if (!jumpOn || !/opacity:1/.test(jumpOn.body)) {
+  failures.push('the visible .cd-jump-on state needs opacity:1');
+}
+
 if (failures.length > 0) {
   console.error('FAIL: stylesheet checks');
   for (const failure of failures) console.error('  - ' + failure);

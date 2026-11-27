@@ -31,6 +31,10 @@ Find in a conversation: press Ctrl/Cmd+F, matches are highlighted, and the curre
 
 ![Find in conversation](media/screenshots/find-dark.png)
 
+Jump to bottom: once the messages scroll away from the bottom, a round button appears above the right side of the composer; clicking it scrolls back linearly over 280ms and the button fades out.
+
+![Jump to bottom](media/screenshots/jump-dark.png)
+
 Usage mirrors DSH: every answer ends with this turn's `↑ billed input · ↓ output` (hover for cache hit and
 reasoning tokens), and the ring on the right of the composer shows context occupancy (hover for
 `~used / window`). Click the usage line or the ring to open the breakdown.
@@ -67,6 +71,7 @@ Light theme:
 - **Exports can also use the official DeepSeek format**: a ZIP laid out like the app export (`manifest.json` / `user.json` / `chat_session_index.json` / `chat_sessions/<id>.json` plus `_files/` images), which this plugin's importer reads back unchanged
 - **Images**: the paperclip uploads images (downscaled to a 1600px long edge and stored in local IndexedDB); bubbles show thumbnails and clicking opens a lightbox (Esc closes). Images imported from a DeepSeek export ZIP are shown the same way
 - **Attachment limits match the app**: up to 50 attachments per conversation, images ≤ 64 MB and text files ≤ 32 MB. Bodies are stored in IndexedDB (never localStorage), and each attachment is capped at 200 KiB when sent to the model, marked as truncated
+- **Jump to bottom**: once the messages scroll away from the bottom, a round button floats above the composer; clicking scrolls back linearly over 280ms, and the button itself fades with `0.28s linear`
 - The top-right capsule is always there (find / read-aloud / new chat); both the sidebar toggle and the find button enter or leave with a `0.28s linear` horizontal animation, so starting a new chat collapses the find button smoothly
 - The sidebar itself slides too: its width transitions between 0 and 261px over 0.28s linear, in sync with the capsule
 - Find in a conversation: Ctrl/Cmd+F highlights matches, marks the current one solid, Enter / Shift+Enter jump, Esc closes

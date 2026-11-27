@@ -3,6 +3,24 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.25.0
+
+### 中文
+
+- 新增「一键到底」浮动按钮：消息滚离底部超过 240px 时，输入框右上方浮出圆形按钮，位置与输入框右缘对齐
+- 点击后按 **280ms 线性**滚回底部（`prefers-reduced-motion: reduce` 时直接跳转，不做动画）；按钮本身用 `0.28s linear` 淡入淡出，滚回底部后自动隐藏
+- 样式测试新增守卫：`.cd-jump` 必须是 `opacity .28s linear` 过渡，`.cd-jump-on` 才允许 `opacity:1`
+- 测试：244 条断言（滚离底部显示、点击线性滚到底、到底后隐藏）
+- README 预览新增「一键到底」截图
+
+### English
+
+- Added a **jump-to-bottom** floating button: once the messages scroll more than 240px away from the bottom, a round button appears above the composer, aligned with the composer's right edge
+- Clicking it scrolls back over **280ms linearly** (`prefers-reduced-motion: reduce` jumps without animation), the button fades with `0.28s linear` and hides once the bottom is reached
+- The stylesheet test now requires `.cd-jump` to use an `opacity .28s linear` transition and only `.cd-jump-on` to reach `opacity:1`
+- Tests: 244 assertions (shown when scrolled up, linear scroll to the bottom, hidden at the bottom)
+- Added a jump-to-bottom screenshot to the README preview
+
 ## 1.24.0
 
 ### 中文

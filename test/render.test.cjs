@@ -2079,6 +2079,36 @@ async function main() {
     console.log('PASS 45: attachments follow the official app limits');
   }
 
+  /* --- 46. jump to bottom with a linear scroll ----------------------------- */
+  {
+    const session = mount();
+    let tree = renderPanel(session);
+    click(byClass(tree, 'cd-item')[0]);
+    tree = rerender();
+    const body = byClass(tree, 'cd-body')[0].dom;
+    body.scrollHeight = 2000;
+    body.clientHeight = 600;
+    body.scrollTop = 0;
+    byClass(tree, 'cd-body')[0].props.onScroll({ currentTarget: body });
+    tree = rerender();
+    const jump = byClass(tree, 'cd-jump')[0];
+    assert(jump, 'the jump-to-bottom button renders');
+    assert(
+      String(jump.props.className).indexOf('cd-jump-on') >= 0,
+      'the button appears once the list is scrolled up',
+    );
+    assert(jump.props['aria-hidden'] === 'false', 'the visible button is exposed to assistive tech');
+    click(jump);
+    await wait(420);
+    tree = rerender();
+    assert(body.scrollTop === 1400, 'the button scrolls to the bottom: ' + body.scrollTop);
+    assert(
+      String(byClass(tree, 'cd-jump')[0].props.className).indexOf('cd-jump-on') === -1,
+      'the button hides again at the bottom',
+    );
+    console.log('PASS 46: jump to bottom with a linear scroll');
+  }
+
   console.log('\nALL CHECKS PASSED (' + checks + ' assertions)');
 }
 

@@ -13,7 +13,7 @@ window.__ModuleLoader__.load({
     const NS = 'deepseek-chat-ui';
     const API = '/chat-replica';
     /** 设置面板底部展示的版本；必须与 package.json 的 version 一致（元数据测试校验）。 */
-    const PLUGIN_VERSION = '1.24.0';
+    const PLUGIN_VERSION = '1.25.0';
     const REPO_URL = 'https://github.com/AlphaAntivoid/dsh-chat-replica';
     const STORE_THREADS = 'deepseek-chat-ui.threads.v1';
     const STORE_ACTIVE = 'deepseek-chat-ui.active.v1';
@@ -151,6 +151,7 @@ window.__ModuleLoader__.load({
       'toast.forked': '已分叉到新对话',
       'action.regenerate': '重新生成',
       'action.attach': '上传图片或文件',
+      'action.jumpBottom': '回到底部',
       'action.voice': '语音输入',
       'action.voiceStop': '停止录音',
       'action.retry': '重试',
@@ -343,6 +344,7 @@ window.__ModuleLoader__.load({
       'toast.forked': 'Forked into a new conversation',
       'action.regenerate': 'Regenerate',
       'action.attach': 'Attach image or file',
+      'action.jumpBottom': 'Jump to bottom',
       'action.voice': 'Voice input',
       'action.voiceStop': 'Stop recording',
       'action.retry': 'Retry',
@@ -619,6 +621,7 @@ window.__ModuleLoader__.load({
         ],
       ],
       arrowUp: [['path', { d: 'M12 19V5M6 11l6-6 6 6' }]],
+      chevronDown: [['path', { d: 'M6 9.5l6 6 6-6' }]],
       stop: [['rect', { x: 8.5, y: 8.5, width: 7, height: 7, rx: 1.8, fill: 'currentColor', stroke: 'none' }]],
       copy: [
         ['rect', { x: 9, y: 9, width: 11, height: 11, rx: 2.5 }],
@@ -4276,6 +4279,8 @@ window.__ModuleLoader__.load({
       const [usagePanel, setUsagePanel] = useState(null);
 
       const bodyRef = useRef(null);
+      const jumpTimerRef = useRef(0);
+      const [showJump, setShowJump] = useState(false);
       const findInputRef = useRef(null);
       const modelChoiceRef = useRef(modelChoice);
       modelChoiceRef.current = modelChoice;
@@ -4668,6 +4673,7 @@ window.__ModuleLoader__.load({
             if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
             if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
             if (drawerTimerRef.current) clearTimeout(drawerTimerRef.current);
+            if (jumpTimerRef.current) clearTimeout(jumpTimerRef.current);
           };
         },
         [],
@@ -4678,9 +4684,51 @@ window.__ModuleLoader__.load({
           const element = bodyRef.current;
           if (!element) return;
           element.scrollTop = element.scrollHeight;
+          setShowJump(false);
         },
         [threads, activeId],
       );
+      /** 消息区滚离底部超过一屏时显示「回到底部」，点击后线性滚回。 */
+      const syncJumpButton = function (element) {
+        if (!element) return;
+        const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
+        setShowJump(Number.isFinite(distance) && distance > 240);
+      };
+
+      const jumpToBottom = function () {
+        const element = bodyRef.current;
+        if (!element) return;
+        const start = element.scrollTop;
+        const target = element.scrollHeight - element.clientHeight;
+        if (!Number.isFinite(target) || target <= start) {
+          setShowJump(false);
+          return;
+        }
+        const reduceMotion =
+          typeof window !== 'undefined' &&
+          typeof window.matchMedia === 'function' &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduceMotion) {
+          element.scrollTop = target;
+          setShowJump(false);
+          return;
+        }
+        const duration = 280;
+        const startedAt = Date.now();
+        if (jumpTimerRef.current) clearTimeout(jumpTimerRef.current);
+        const tick = function () {
+          const progress = Math.min(1, (Date.now() - startedAt) / duration);
+          element.scrollTop = start + (target - start) * progress;
+          if (progress < 1) {
+            jumpTimerRef.current = setTimeout(tick, 16);
+          } else {
+            jumpTimerRef.current = 0;
+            setShowJump(false);
+          }
+        };
+        tick();
+      };
+
       /** Keep an explicit 「跟随系统」 choice in step with the phone's switch. */
       useEffect(
         function () {
@@ -6469,7 +6517,14 @@ window.__ModuleLoader__.load({
           ),
           h(
             'div',
-            { className: 'cd-body', ref: bodyRef },
+            {
+              className: 'cd-body',
+              ref: bodyRef,
+              onScroll: function (event) {
+                const element = event && event.currentTarget ? event.currentTarget : bodyRef.current;
+                syncJumpButton(element);
+              },
+            },
             findOpen ? renderFindBar() : null,
             hasMessages
               ? renderThread()
@@ -6478,6 +6533,21 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'cd-input-area' },
+            hasMessages
+              ? h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'cd-jump' + (showJump ? ' cd-jump-on' : ''),
+                    title: t('action.jumpBottom'),
+                    'aria-label': t('action.jumpBottom'),
+                    'aria-hidden': showJump ? 'false' : 'true',
+                    tabIndex: showJump ? 0 : -1,
+                    onClick: jumpToBottom,
+                  },
+                  h(Icon, { name: 'chevronDown', size: 22, strokeWidth: 2 }),
+                )
+              : null,
             usagePanel === null ? null : renderUsagePanel(),
             modelMenu ? renderModelMenu() : null,
             undoDelete !== null
@@ -6796,6 +6866,11 @@ window.__ModuleLoader__.load({
 .cd-md pre code{padding:0;background:transparent;font-size:calc(var(--cd-text-size) - 3px);line-height:calc(var(--cd-text-size) + 6px);white-space:pre}
 
 .cd-input-area{position:relative;z-index:10;box-sizing:border-box;display:flex;flex-shrink:0;flex-direction:column;align-items:center;padding-bottom:max(4px,env(safe-area-inset-bottom))}
+/* 一键到底：随消息滚动线性淡入/淡出，点击后按 280ms 线性滚回底部 */
+.cd-jump{position:absolute;right:max(16px,calc((100% - var(--cd-maxw) + 64px) / 2));bottom:calc(100% + 14px);z-index:20;display:flex;align-items:center;justify-content:center;width:38px;height:38px;padding:0;border:1px solid var(--dsw-alias-border-l2);border-radius:50%;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;transform:translateY(10px) scale(.92);pointer-events:none;transition:opacity .28s linear,transform .28s linear,background-color .2s,color .2s;box-shadow:0 6px 20px rgba(0,0,0,.12)}
+.cd-jump-on{opacity:1;transform:none;pointer-events:auto}
+.cd-jump:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.cd-jump:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
 .cd-input-box{width:calc(var(--cd-maxw) - 64px);max-width:calc(100% - 32px)}
 .cd-composer{box-sizing:border-box;display:flex;flex-direction:column;width:100%;overflow:hidden;border:1px solid var(--dsw-alias-border-l2-darkmode-thin);border-radius:24px;background:var(--dsw-specific-input-major);font-size:var(--cd-text-size);line-height:var(--cd-line);cursor:text}
 .cd-composer-home{box-shadow:0 4px 12px rgba(0,0,0,.02),0 2px 2px rgba(72,104,178,.01),0 30px 60px rgba(72,104,178,.03)}
