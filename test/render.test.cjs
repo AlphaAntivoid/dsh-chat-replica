@@ -1858,6 +1858,10 @@ async function main() {
     await wait(40);
     tree = rerender();
     assert(byClass(tree, 'cd-chip-image').length === 1, 'the composer shows an image chip');
+    assert(
+      byClass(tree, 'cd-send')[0].props.disabled === false,
+      'an image without text still enables the send button',
+    );
     click(byClass(tree, 'cd-send')[0]);
     await wait(560);
     tree = rerender();

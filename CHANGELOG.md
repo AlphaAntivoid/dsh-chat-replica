@@ -3,6 +3,18 @@
 每个版本同时保留中文与 English 两小节；`scripts/release-notes.mjs` 会取出版本对应小节作为 GitHub Release 的正文。
 Every version keeps a Chinese and an English section together; `scripts/release-notes.mjs` turns that section into the GitHub Release body.
 
+## 1.23.1
+
+### 中文
+
+- 修复只发图片时发送按钮不可用：禁用条件原先只看输入框文本，现在文本为空但带附件时也允许发送
+- 测试：229 条断言（新增「只带图片时发送按钮可用」）
+
+### English
+
+- Fixed the send button being disabled when only images are attached: the disabled state used to look at the draft text alone, and now allows sending when the text is empty but attachments exist
+- Tests: 229 assertions (added "an image without text enables the send button")
+
 ## 1.23.0
 
 ### 中文
